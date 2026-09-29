@@ -33,7 +33,7 @@
     document.documentElement.style.setProperty('--a-rgb', c.rgb);
   }
 
-  var VIEWS = ['loading', 'login', 'forgot', 'reset', 'home', 'fatal'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal'];
   var currentView = null;
   function show(name, focusId) {
     VIEWS.forEach(function (v) { var el = $('view-' + v); if (el) el.hidden = (v !== name); });
@@ -115,6 +115,20 @@
     return 'Something went wrong. Please try again.';
   }
 
+  function isSessionError(err) {
+    var e = err || {};
+    var code = e.code || e.error_code || '';
+    return code === 'session_not_found' || code === 'session_expired' || code === 'refresh_token_not_found' ||
+      code === 'refresh_token_already_used' || e.name === 'AuthSessionMissingError' || e.status === 401 ||
+      /auth session missing|session.*(not found|expired)/i.test(String(e.message || ''));
+  }
+
+  function isUsedLinkError(err) {
+    var e = err || {};
+    var code = e.code || e.error_code || '';
+    return code === 'otp_expired' || code === 'otp_disabled' || e.status === 403 || /expired|invalid/i.test(String(e.message || ''));
+  }
+
   /* ---------- read reset-link info BEFORE the library cleans the address ---------- */
   var hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   var queryParams = new URLSearchParams(window.location.search);
@@ -131,7 +145,11 @@
   if (recoveryMode) setRecovery(true);
   var linkErrorCode = hashParams.get('error_code') || queryParams.get('error_code') || '';
   var linkError = hashParams.get('error_description') || queryParams.get('error_description') || hashParams.get('error') || queryParams.get('error') || '';
-  var hadAuthStuffInUrl = !!(hashParams.get('access_token') || hashParams.get('error') || queryParams.get('error') || queryParams.get('code'));
+  // New-style reset links carry a one-time code (token_hash) that is only used when the person taps Continue,
+  // so opening the link twice, or an email app previewing it, can't use it up.
+  var pendingTokenHash = queryParams.get('type') === 'recovery' ? queryParams.get('token_hash') : null;
+  var hadAuthStuffInUrl = !!(hashParams.get('access_token') || hashParams.get('error') || queryParams.get('error') || queryParams.get('code') || queryParams.get('token_hash'));
+  var recoveryEmail = '';
 
   function linkErrorText() {
     if (!linkError && !linkErrorCode) return '';
@@ -142,7 +160,7 @@
   }
 
   function cleanUrl() {
-    if (!hadAuthStuffInUrl) return;
+    if (!hadAuthStuffInUrl || pendingTokenHash) return; // keep an unused code so a reload still works
     try { window.history.replaceState(null, '', window.location.pathname); } catch (e) { /* ignore */ }
   }
 
@@ -212,6 +230,8 @@
   sb.auth.onAuthStateChange(function (event, session) {
     // Keep this callback quick and never call other Supabase functions inside it.
     if (event === 'PASSWORD_RECOVERY') {
+      if (session && session.user && session.user.email) recoveryEmail = session.user.email;
+      pendingTokenHash = null;
       setRecovery(true);
       cleanUrl();
       show('reset', 'reset-password');
@@ -224,11 +244,12 @@
       userLoggedOutOnPurpose = false;
       return;
     }
-    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session && !recoveryMode) {
-      if (currentView === 'login' || currentView === 'loading') {
-        // e.g. logged in on another tab
-        if (homeShownFor !== session.user.id) setTimeout(function () { showHome(session); }, 0);
-      }
+    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session && !recoveryMode && !pendingTokenHash) {
+      // e.g. logged in on another tab. Re-check after the tick: boot may have moved to another screen meanwhile.
+      setTimeout(function () {
+        if (recoveryMode || pendingTokenHash) return;
+        if ((currentView === 'login' || currentView === 'loading') && homeShownFor !== session.user.id) showHome(session);
+      }, 0);
     }
   });
 
@@ -236,8 +257,13 @@
     show('loading');
     sb.auth.getSession().then(function (res) {
       var session = res && res.data ? res.data.session : null;
+      if (pendingTokenHash) { setMsg('continue-msg', ''); show('continue'); return; }
       cleanUrl();
-      if (recoveryMode && session) { show('reset', 'reset-password'); return; }
+      if (recoveryMode && session) {
+        if (session.user && session.user.email) recoveryEmail = session.user.email;
+        show('reset', 'reset-password');
+        return;
+      }
       if (recoveryMode && !session) {
         setRecovery(false);
         showLogin(linkErrorText() || "That reset link didn't work. Check your internet, or ask for a new link below.");
@@ -371,6 +397,73 @@
     });
   });
 
+  /* ---------- reset link landing: Continue ---------- */
+  var continueBusy = false;
+  $('continue-btn').addEventListener('click', function () {
+    if (continueBusy || !pendingTokenHash) return;
+    if (!navigator.onLine) { setMsg('continue-msg', "You're offline. Connect to the internet and try again."); return; }
+    continueBusy = true;
+    var btn = $('continue-btn');
+    setMsg('continue-msg', '');
+    setBusy(btn, true, 'Checking link…');
+    sb.auth.verifyOtp({ token_hash: pendingTokenHash, type: 'recovery' }).then(function (res) {
+      if (res.error) throw res.error;
+      var s = res.data && res.data.session;
+      if (!s) throw new Error('No session returned');
+      if (s.user && s.user.email) recoveryEmail = s.user.email;
+      pendingTokenHash = null;
+      setRecovery(true);
+      cleanUrl();
+      show('reset', 'reset-password');
+    }).catch(function (e) {
+      console.warn('Reset link check failed:', e && (e.code || e.message));
+      var offlineish = e && (e.name === 'AuthRetryableFetchError' || e.name === 'AbortError' || (e.status || 0) >= 500 || !navigator.onLine);
+      if (!offlineish && isUsedLinkError(e)) {
+        pendingTokenHash = null;
+        cleanUrl();
+        setMsg('continue-msg', 'This link has expired or was already used. If you already set a new password, just log in. Otherwise, send yourself a new link.');
+        $('continue-btn').hidden = true;
+        $('continue-new-link').hidden = false;
+      } else {
+        setMsg('continue-msg', friendly(e)); // internet problem: the link is still good, try again
+      }
+    }).finally(function () {
+      continueBusy = false;
+      setBusy(btn, false);
+    });
+  });
+  $('continue-new-link').addEventListener('click', function () {
+    setMsg('forgot-msg', '');
+    show('forgot', 'forgot-email');
+  });
+  $('continue-cancel').addEventListener('click', function () {
+    pendingTokenHash = null;
+    cleanUrl();
+    showLogin('');
+  });
+
+  function resetSessionLost() {
+    // The reset session ended before saving (e.g. the link was open in two tabs).
+    // Never leave a dead end: go straight to "send a new link" with the email filled in.
+    setRecovery(false);
+    wipeLocalSession();
+    $('reset-password').value = ''; $('reset-confirm').value = '';
+    $('forgot-email').value = recoveryEmail || '';
+    setMsg('forgot-msg', 'Your reset link timed out before your new password was saved. Send yourself a new link below. Tip: open the link only once.');
+    show('forgot', recoveryEmail ? null : 'forgot-email');
+  }
+
+  $('reset-cancel').addEventListener('click', function () {
+    setRecovery(false);
+    userLoggedOutOnPurpose = true;
+    $('reset-password').value = ''; $('reset-confirm').value = '';
+    sb.auth.signOut({ scope: 'local' }).catch(function () {}).finally(function () {
+      wipeLocalSession();
+      userLoggedOutOnPurpose = false;
+      showLogin('');
+    });
+  });
+
   /* ---------- set a new password (after tapping the email link) ---------- */
   var resetBusy = false;
   $('reset-form').addEventListener('submit', function (ev) {
@@ -399,6 +492,7 @@
       });
     }).catch(function (e) {
       console.warn('Password update failed:', e && (e.code || e.message));
+      if (isSessionError(e)) { resetSessionLost(); return; }
       setMsg('reset-msg', friendly(e));
     }).finally(function () {
       resetBusy = false;

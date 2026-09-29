@@ -92,6 +92,16 @@
     </form>
   </section>
 
+  <!-- RESET LINK LANDING: nothing is used up until a person taps Continue -->
+  <section id="view-continue" class="card view" hidden aria-labelledby="continue-title">
+    <h2 id="continue-title" class="card-title">Reset your password</h2>
+    <p class="muted">Tap Continue to choose a new password.</p>
+    <p id="continue-msg" class="msg" role="alert" hidden></p>
+    <button type="button" class="btn-primary" id="continue-btn">Continue</button>
+    <button type="button" class="btn-link" id="continue-new-link" hidden>Send me a new link</button>
+    <button type="button" class="btn-link" id="continue-cancel">Back to log in</button>
+  </section>
+
   <!-- SET NEW PASSWORD -->
   <section id="view-reset" class="card view" hidden aria-labelledby="reset-title">
     <h2 id="reset-title" class="card-title">Set a new password</h2>
@@ -106,6 +116,7 @@
       <input id="reset-confirm" name="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
       <p id="reset-msg" class="msg" role="alert" hidden></p>
       <button type="submit" class="btn-primary" id="reset-btn">Save new password</button>
+      <button type="button" class="btn-link" id="reset-cancel">Cancel</button>
     </form>
   </section>
 
