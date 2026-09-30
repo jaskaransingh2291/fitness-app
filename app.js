@@ -192,6 +192,35 @@
     return window.fetch(input, opts).finally(function () { clearTimeout(timer); });
   }
 
+
+  /* ---------- Fast tap ----------
+     On phones, tapping a button while the keyboard is open closes the keyboard FIRST, and the page
+     jumps before the tap lands, so the first tap "misses". Buttons marked .fast-tap act the moment the
+     finger lifts (before anything moves). The phone's late "click" that follows is then ignored. */
+  var fastTap = null;   // { t, x, y } of the last finger-up we acted on
+  document.addEventListener('pointerup', function (ev) {
+    if (ev.pointerType === 'mouse') return;
+    var el = document.elementFromPoint(ev.clientX, ev.clientY);
+    var btn = el && el.closest ? el.closest('.fast-tap') : null;
+    var down = ev.target && ev.target.closest ? ev.target.closest('.fast-tap') : null;
+    if (!btn || btn !== down || btn.disabled || btn.offsetParent === null) return;   // finger must go down AND up on the same button
+    fastTap = { t: Date.now(), x: ev.clientX, y: ev.clientY };
+    if (btn.type === 'submit' && btn.form) {
+      if (typeof btn.form.requestSubmit === 'function') btn.form.requestSubmit(btn);
+      else btn.form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    } else {
+      btn.click();
+    }
+  }, true);
+  document.addEventListener('click', function (ev) {
+    // Ignore only the phone's own leftover click for that same finger-up: same spot, straight after.
+    // Any other tap (a different spot, or later) works normally.
+    if (!fastTap || !ev.isTrusted) return;
+    var same = Math.abs(ev.clientX - fastTap.x) < 12 && Math.abs(ev.clientY - fastTap.y) < 12 && Date.now() - fastTap.t < 800;
+    if (same) { ev.preventDefault(); ev.stopImmediatePropagation(); }
+    fastTap = null;   // one-shot
+  }, true);
+
   /* ---------- start ---------- */
   pickAccent();
 
@@ -960,8 +989,8 @@
     updateProfileHip();
     renderSwatches('p-swatches', 'p-colour', p.surprise_colors === false ? p.accent_color : p.accent_color);
     $('p-surprise').checked = p.surprise_colors !== false;
-    ['profile-msg', 'colour-msg', 'pw-msg'].forEach(function (id) { setMsg(id, ''); });
-    $('pw-new').value = ''; $('pw-confirm').value = '';
+    ['profile-msg', 'colour-msg'].forEach(function (id) { setMsg(id, ''); });
+    resetPwCard('');
     show('profile');
     focusQuiet($('profile-title'));
   }
@@ -1057,11 +1086,98 @@
     saveColour(fav, on);
   });
 
-  /* Change password */
+  /* Change password: 1) confirm the current password, 2) choose a new one. Forgot → reset email. */
+  var pwVerifiedAt = 0;
+  var PW_CONFIRM_WINDOW_MS = 10 * 60 * 1000;
+  function resetPwCard(doneText) {
+    pwVerifiedAt = 0;
+    ['pw-current', 'pw-new', 'pw-confirm'].forEach(function (id) { $(id).value = ''; markInvalid($(id), false); });
+    ['pw-check-msg', 'pw-msg'].forEach(function (id) { setMsg(id, ''); });
+    $('pw-check-form').hidden = true;
+    $('pw-form').hidden = true;
+    $('pw-open').hidden = false;
+    setMsg('pw-done', doneText || '', 'ok');
+  }
+  $('pw-open').addEventListener('click', function () {
+    setMsg('pw-done', '');
+    $('pw-open').hidden = true;
+    $('pw-check-form').hidden = false;
+    focusQuiet($('pw-current'));
+  });
+  $('pw-cancel-1').addEventListener('click', function () { resetPwCard(''); });
+  $('pw-cancel-2').addEventListener('click', function () { resetPwCard(''); });
+
+  var pwCheckBusy = false;
+  $('pw-check-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (pwCheckBusy) return;
+    var cur = $('pw-current'), btn = $('pw-check-btn');
+    markInvalid(cur, false);
+    if (!cur.value) { markInvalid(cur, true); setMsg('pw-check-msg', 'Enter your current password.'); cur.focus(); return; }
+    if (!navigator.onLine) { setMsg('pw-check-msg', "You're offline. Connect to the internet and try again."); return; }
+    if (!me || !me.email) { setMsg('pw-check-msg', 'Please log out and back in, then try again.'); return; }
+    pwCheckBusy = true;
+    setMsg('pw-check-msg', '');
+    setBusy(btn, true, 'Checking…');
+    // Logging in again with the current password is how we check it (it just refreshes your session).
+    sb.auth.signInWithPassword({ email: me.email, password: cur.value }).then(function (res) {
+      if (res.error) throw res.error;
+      pwVerifiedAt = Date.now();
+      cur.value = '';
+      $('pw-check-form').hidden = true;
+      $('pw-form').hidden = false;
+      focusQuiet($('pw-new'));
+    }).catch(function (e) {
+      console.warn('Current password check failed:', e && (e.code || e.message));
+      if (e && (e.code === 'invalid_credentials' || /invalid login/i.test(e.message || ''))) {
+        cur.value = ''; markInvalid(cur, true); cur.focus();
+        setMsg('pw-check-msg', "That's not your current password. Try again, or use \u201cForgot your current password?\u201d below.");
+      } else {
+        setMsg('pw-check-msg', friendly(e));
+      }
+    }).finally(function () {
+      pwCheckBusy = false;
+      setBusy(btn, false);
+    });
+  });
+
+  var pwForgotBusy = false, pwForgotTimer = null;
+  $('pw-forgot').addEventListener('click', function () {
+    var btn = $('pw-forgot');
+    if (pwForgotBusy || btn.disabled) return;
+    if (!navigator.onLine) { setMsg('pw-check-msg', "You're offline. Connect to the internet and try again."); return; }
+    pwForgotBusy = true;
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Sending…';
+    sb.auth.resetPasswordForEmail(me.email, { redirectTo: window.location.origin + window.location.pathname }).then(function (res) {
+      var e = res && res.error;
+      if (e && (e.status === 429 || e.name === 'AuthRetryableFetchError' || e.name === 'AbortError' || (e.status || 0) >= 500)) throw e;
+      setMsg('pw-check-msg', 'We\u2019ve emailed a reset link to ' + me.email + '. Open it on this phone to choose a new password.', 'ok');
+      var left = RESET_COOLDOWN_S;
+      btn.textContent = 'Email sent \u2014 send again in ' + left + 's';
+      clearInterval(pwForgotTimer);
+      pwForgotTimer = setInterval(function () {
+        left -= 1;
+        if (left <= 0) { clearInterval(pwForgotTimer); btn.disabled = false; btn.textContent = btn.dataset.label; }
+        else btn.textContent = 'Email sent \u2014 send again in ' + left + 's';
+      }, 1000);
+    }).catch(function (e) {
+      console.warn('Reset email failed:', e && (e.code || e.message));
+      setMsg('pw-check-msg', friendly(e));
+      btn.disabled = false; btn.textContent = btn.dataset.label;
+    }).finally(function () { pwForgotBusy = false; });
+  });
+
   var pwBusy = false;
   $('pw-form').addEventListener('submit', function (ev) {
     ev.preventDefault();
     if (pwBusy) return;
+    if (!pwVerifiedAt || Date.now() - pwVerifiedAt > PW_CONFIRM_WINDOW_MS) {
+      resetPwCard('');
+      $('pw-open').hidden = true; $('pw-check-form').hidden = false;
+      setMsg('pw-check-msg', 'For safety, please confirm your current password again.');
+      return;
+    }
     var p1 = $('pw-new'), p2 = $('pw-confirm'), btn = $('pw-save');
     markInvalid(p1, false); markInvalid(p2, false);
     var pw = p1.value;
@@ -1072,11 +1188,10 @@
     if (!navigator.onLine) { setMsg('pw-msg', "You're offline. Connect to the internet and try again."); return; }
     pwBusy = true;
     setMsg('pw-msg', '');
-    setBusy(btn, true, 'Changing…');
+    setBusy(btn, true, 'Saving…');
     sb.auth.updateUser({ password: pw }).then(function (res) {
       if (res.error) throw res.error;
-      p1.value = ''; p2.value = '';
-      setMsg('pw-msg', 'Password changed. Use the new one next time you log in.', 'ok');
+      resetPwCard('Password changed. Use the new one next time you log in.');
     }).catch(function (e) {
       console.warn('Password change failed:', e && (e.code || e.message));
       setMsg('pw-msg', friendly(e));

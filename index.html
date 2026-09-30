@@ -75,7 +75,7 @@
         <button type="button" class="pw-toggle" data-target="login-password" aria-controls="login-password" aria-pressed="false">Show</button>
       </div>
       <p id="login-msg" class="msg" role="alert" hidden></p>
-      <button type="submit" class="btn-primary" id="login-btn">Log in</button>
+      <button type="submit" class="btn-primary fast-tap" id="login-btn">Log in</button>
       <button type="button" class="btn-link" id="to-forgot">Forgot password?</button>
     </form>
   </section>
@@ -88,7 +88,7 @@
       <label for="forgot-email">Email</label>
       <input id="forgot-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="254" required>
       <p id="forgot-msg" class="msg" role="alert" hidden></p>
-      <button type="submit" class="btn-primary" id="forgot-btn">Send reset link</button>
+      <button type="submit" class="btn-primary fast-tap" id="forgot-btn">Send reset link</button>
       <button type="button" class="btn-link" id="to-login">Back to log in</button>
     </form>
   </section>
@@ -116,7 +116,7 @@
       <label for="reset-confirm">Type it again</label>
       <input id="reset-confirm" name="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
       <p id="reset-msg" class="msg" role="alert" hidden></p>
-      <button type="submit" class="btn-primary" id="reset-btn">Save new password</button>
+      <button type="submit" class="btn-primary fast-tap" id="reset-btn">Save new password</button>
       <button type="button" class="btn-link" id="reset-cancel">Cancel</button>
     </form>
   </section>
@@ -152,7 +152,7 @@
         <h2 class="step-q" id="setup-question" tabindex="-1">What should we call you?</h2>
         <p class="muted">Your crew will see this name.</p>
         <label for="s-name">Name</label>
-        <input id="s-name" type="text" autocomplete="nickname" maxlength="40" autocapitalize="words" spellcheck="false">
+        <input id="s-name" type="text" enterkeyhint="next" autocomplete="nickname" maxlength="40" autocapitalize="words" spellcheck="false">
       </div>
 
       <fieldset class="step choices" data-step="sex" hidden>
@@ -221,10 +221,10 @@
 
       <p id="setup-msg" class="msg" role="alert" hidden></p>
       <div class="step-actions">
-        <button type="button" class="btn-secondary btn-back" id="setup-back">Back</button>
-        <button type="submit" class="btn-primary btn-next" id="setup-next">Next</button>
+        <button type="button" class="btn-secondary btn-back fast-tap" id="setup-back">Back</button>
+        <button type="submit" class="btn-primary btn-next fast-tap" id="setup-next">Next</button>
       </div>
-      <button type="button" class="btn-link" id="setup-skip" hidden>Skip</button>
+      <button type="button" class="btn-link fast-tap" id="setup-skip" hidden>Skip</button>
     </form>
   </section>
 
@@ -310,7 +310,7 @@
           <div class="p-hip-wrap"><label for="p-hip">Hips</label><input id="p-hip" type="text" inputmode="decimal" maxlength="5"></div>
         </div>
         <p id="profile-msg" class="msg" role="alert" hidden></p>
-        <button type="submit" class="btn-primary" id="profile-save">Save changes</button>
+        <button type="submit" class="btn-primary fast-tap" id="profile-save">Save changes</button>
       </form>
     </div>
 
@@ -321,9 +321,27 @@
       <p id="colour-msg" class="msg" role="status" hidden></p>
     </div>
 
-    <div class="card">
-      <h2 class="card-title">Change password</h2>
-      <form id="pw-form" novalidate>
+    <div class="card" id="pw-card">
+      <h2 class="card-title">Password</h2>
+      <p id="pw-done" class="msg ok" role="status" hidden></p>
+      <button type="button" class="btn-secondary" id="pw-open">Change password</button>
+
+      <!-- Step 1: prove it's you -->
+      <form id="pw-check-form" novalidate hidden>
+        <label for="pw-current">Current password</label>
+        <div class="pw-wrap">
+          <input id="pw-current" type="password" autocomplete="current-password" maxlength="72">
+          <button type="button" class="pw-toggle" data-target="pw-current" aria-controls="pw-current" aria-pressed="false">Show</button>
+        </div>
+        <p id="pw-check-msg" class="msg" role="alert" hidden></p>
+        <button type="submit" class="btn-primary fast-tap" id="pw-check-btn">Continue</button>
+        <button type="button" class="btn-link" id="pw-forgot">Forgot your current password?</button>
+        <button type="button" class="btn-link" id="pw-cancel-1">Cancel</button>
+      </form>
+
+      <!-- Step 2: choose the new one -->
+      <form id="pw-form" novalidate hidden>
+        <p class="muted small">Current password confirmed. Choose a new one (at least 8 characters).</p>
         <label for="pw-new">New password</label>
         <div class="pw-wrap">
           <input id="pw-new" type="password" autocomplete="new-password" maxlength="72">
@@ -332,7 +350,8 @@
         <label for="pw-confirm">Type it again</label>
         <input id="pw-confirm" type="password" autocomplete="new-password" maxlength="72">
         <p id="pw-msg" class="msg" role="alert" hidden></p>
-        <button type="submit" class="btn-secondary" id="pw-save">Change password</button>
+        <button type="submit" class="btn-primary fast-tap" id="pw-save">Save new password</button>
+        <button type="button" class="btn-link" id="pw-cancel-2">Cancel</button>
       </form>
     </div>
 
