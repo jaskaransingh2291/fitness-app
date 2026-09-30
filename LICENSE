@@ -1,0 +1,13 @@
+Copyright (c) 2026 Jaskaran Singh. All rights reserved.
+
+Taakat is public on GitHub so people can view it as part of my portfolio.
+
+You may view this code and fork it on GitHub, as GitHub's Terms of Service allow.
+You may NOT copy, modify, publish, host, distribute, sell or otherwise use this
+code, its design, the Taakat name and logo, or its compiled food and exercise
+lists in your own projects without my written permission.
+
+Third-party parts keep their own licences:
+- vendor/supabase.js: Supabase JavaScript client, MIT License, (c) Supabase.
+- Fonts (Sora, Karla, Noto Sans Gurmukhi) are loaded from Google Fonts under
+  the SIL Open Font License.
