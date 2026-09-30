@@ -15,7 +15,7 @@ jobs:
             -H "apikey: sb_publishable_U191Gd_P-FAYsuZ5uq0b2A_ylvgiHdu" \
             "https://guhrftmudycxlzzygtir.supabase.co/rest/v1/profiles?select=id&limit=1")
           echo "Supabase answered: $code"
-          if [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
-            echo "Supabase did not answer properly - it may be paused."
+                   if [ "$code" != "200" ]; then
+            echo "Expected 200 - Supabase may be paused, or the key or rules changed."
             exit 1
           fi
