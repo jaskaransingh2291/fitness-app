@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="styles.css">
 <script src="vendor/supabase.js" defer></script>
 <script src="config.js" defer></script>
+<script src="calc.js" defer></script>
 <script src="app.js" defer></script>
 </head>
 <body>
@@ -59,7 +60,7 @@
   <!-- LOADING -->
   <section id="view-loading" class="card view" aria-live="polite">
     <div class="spinner" aria-hidden="true"></div>
-    <p class="muted center">Getting things ready…</p>
+    <p class="muted center" id="loading-text">Getting things ready…</p>
   </section>
 
   <!-- LOG IN -->
@@ -120,13 +121,223 @@
     </form>
   </section>
 
-  <!-- LOGGED IN (placeholder until the next stages) -->
-  <section id="view-home" class="card view" hidden aria-labelledby="home-title">
-    <h2 id="home-title" class="card-title">You're logged in</h2>
-    <p class="muted">Signed in as <b id="home-email" class="email"></b></p>
-    <p id="home-msg" class="msg" role="status" hidden></p>
-    <p class="muted">The rest of Taakat is on its way.</p>
-    <button type="button" class="btn-secondary" id="logout-btn">Log out</button>
+  <!-- ====================== LOGGED-IN SCREENS ====================== -->
+  <header class="topbar" id="topbar" hidden>
+    <svg class="topbar-logo" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+      <circle class="ring-static" cx="100" cy="100" r="86"></circle>
+      <svg x="30" y="29" width="140" height="140" viewBox="0 0 200 200">
+        <path class="arm-fill" d="M24,120 C32,100 44,80 66,72 C92,64 118,84 122,116 C136,112 156,116 164,128 C168,150 158,170 130,170 C100,172 60,174 24,170 Z"></path>
+        <path class="arm-line thick" d="M24,120 C32,100 44,80 66,72 C92,64 118,84 122,116 M164,128 C168,150 158,170 130,170 C100,172 60,174 24,170"></path>
+        <path class="arm thick" d="M164,128 C162,108 160,90 157,74 C166,70 169,58 167,46 C165,33 157,26 146,26 L118,26 C107,26 100,30 100,37 C100,42 104,45 109,45 C102,45 99,49 100,54 C101,59 106,62 112,62 C116,62 119,64 120,67 C118,84 118,100 122,116"></path>
+      </svg>
+    </svg>
+    <h1 class="topbar-title" id="topbar-title">Taakat</h1>
+  </header>
+
+  <!-- PROFILE COULDN'T LOAD (never show setup just because the internet failed) -->
+  <section id="view-profile-error" class="card view" hidden aria-labelledby="perr-title">
+    <h2 id="perr-title" class="card-title">Couldn't load your profile</h2>
+    <p class="muted" id="perr-text">Check your internet, then try again. Your saved details are safe.</p>
+    <button type="button" class="btn-primary" id="perr-retry">Try again</button>
+    <button type="button" class="btn-link" id="perr-logout">Log out</button>
+  </section>
+
+  <!-- FIRST-TIME SETUP: one question per screen -->
+  <section id="view-setup" class="card view" hidden aria-labelledby="setup-question">
+    <div class="progress" aria-hidden="true"><div class="progress-fill" id="setup-progress"></div></div>
+    <p class="step-count" id="setup-count">Step 1 of 9</p>
+    <form id="setup-form" novalidate>
+
+      <div class="step" data-step="name">
+        <h2 class="step-q" id="setup-question" tabindex="-1">What should we call you?</h2>
+        <p class="muted">Your crew will see this name.</p>
+        <label for="s-name">Name</label>
+        <input id="s-name" type="text" autocomplete="nickname" maxlength="40" autocapitalize="words" spellcheck="false">
+      </div>
+
+      <fieldset class="step choices" data-step="sex" hidden>
+        <legend class="step-q" tabindex="-1">Sex at birth</legend>
+        <p class="muted">Used only for the calorie formula and body-fat estimate.</p>
+        <label class="choice"><input type="radio" name="s-sex" value="female"><span class="choice-body"><b>Female</b></span></label>
+        <label class="choice"><input type="radio" name="s-sex" value="male"><span class="choice-body"><b>Male</b></span></label>
+      </fieldset>
+
+      <div class="step" data-step="age" hidden>
+        <h2 class="step-q" tabindex="-1">How old are you?</h2>
+        <label for="s-age">Age in years</label>
+        <div class="num-row"><input id="s-age" type="text" inputmode="numeric" autocomplete="off" maxlength="3"><span class="unit">years</span></div>
+      </div>
+
+      <div class="step" data-step="height" hidden>
+        <h2 class="step-q" tabindex="-1">How tall are you?</h2>
+        <label for="s-height">Height in centimetres</label>
+        <div class="num-row"><input id="s-height" type="text" inputmode="decimal" autocomplete="off" maxlength="5"><span class="unit">cm</span></div>
+        <p class="hint" id="s-height-hint" aria-live="polite"></p>
+      </div>
+
+      <div class="step" data-step="weight" hidden>
+        <h2 class="step-q" tabindex="-1">What do you weigh?</h2>
+        <label for="s-weight">Weight in kilograms</label>
+        <div class="num-row"><input id="s-weight" type="text" inputmode="decimal" autocomplete="off" maxlength="5"><span class="unit">kg</span></div>
+        <p class="hint" id="s-weight-hint" aria-live="polite"></p>
+      </div>
+
+      <fieldset class="step choices" data-step="activity" hidden>
+        <legend class="step-q" tabindex="-1">How active are you?</legend>
+        <label class="choice"><input type="radio" name="s-activity" value="sedentary"><span class="choice-body"><b>Mostly sitting</b><small>Desk job, little or no exercise</small></span></label>
+        <label class="choice"><input type="radio" name="s-activity" value="light"><span class="choice-body"><b>Lightly active</b><small>Workouts 1–3 times a week</small></span></label>
+        <label class="choice"><input type="radio" name="s-activity" value="moderate"><span class="choice-body"><b>Active</b><small>Workouts 3–5 times a week</small></span></label>
+        <label class="choice"><input type="radio" name="s-activity" value="very"><span class="choice-body"><b>Very active</b><small>Hard workouts 6–7 times a week</small></span></label>
+        <label class="choice"><input type="radio" name="s-activity" value="extreme"><span class="choice-body"><b>Athlete level</b><small>Twice a day, or a physical job plus training</small></span></label>
+      </fieldset>
+
+      <fieldset class="step choices" data-step="goal" hidden>
+        <legend class="step-q" tabindex="-1">What's your goal?</legend>
+        <label class="choice"><input type="radio" name="s-goal" value="cut"><span class="choice-body"><b>Lose fat (cut)</b><small>Eat about 500 kcal a day below maintenance</small></span></label>
+        <label class="choice"><input type="radio" name="s-goal" value="maintain"><span class="choice-body"><b>Stay the same (maintain)</b><small>Eat about your maintenance calories</small></span></label>
+        <label class="choice"><input type="radio" name="s-goal" value="bulk"><span class="choice-body"><b>Build muscle (bulk)</b><small>Eat about 300 kcal a day above maintenance</small></span></label>
+      </fieldset>
+
+      <div class="step" data-step="bodyfat" hidden>
+        <h2 class="step-q" tabindex="-1">Body fat (optional)</h2>
+        <p class="muted">Measure with a soft tape, relaxed, in cm. Neck just below the Adam's apple; waist at the belly button<span class="hip-only" hidden>; hips at the widest point</span>. Makes your numbers more accurate. You can skip this.</p>
+        <label for="s-neck">Neck</label>
+        <div class="num-row"><input id="s-neck" type="text" inputmode="decimal" autocomplete="off" maxlength="5"><span class="unit">cm</span></div>
+        <label for="s-waist">Waist</label>
+        <div class="num-row"><input id="s-waist" type="text" inputmode="decimal" autocomplete="off" maxlength="5"><span class="unit">cm</span></div>
+        <div class="hip-only" hidden>
+          <label for="s-hip">Hips</label>
+          <div class="num-row"><input id="s-hip" type="text" inputmode="decimal" autocomplete="off" maxlength="5"><span class="unit">cm</span></div>
+        </div>
+        <p class="hint" id="s-bf-hint" aria-live="polite"></p>
+      </div>
+
+      <fieldset class="step" data-step="colour" hidden>
+        <legend class="step-q" tabindex="-1">Pick your colour</legend>
+        <p class="muted">Your favourite colour for Taakat. You can change it any time in your profile.</p>
+        <div class="swatches" id="s-swatches"></div>
+        <label class="toggle-row"><input type="checkbox" id="s-surprise" checked><span class="toggle" aria-hidden="true"></span><span><b>Surprise me</b><small>A different colour every time you open Taakat</small></span></label>
+      </fieldset>
+
+      <p id="setup-msg" class="msg" role="alert" hidden></p>
+      <div class="step-actions">
+        <button type="button" class="btn-secondary btn-back" id="setup-back">Back</button>
+        <button type="submit" class="btn-primary btn-next" id="setup-next">Next</button>
+      </div>
+      <button type="button" class="btn-link" id="setup-skip" hidden>Skip</button>
+    </form>
+  </section>
+
+  <!-- HOME (Today) -->
+  <section id="view-home" class="view home" hidden aria-labelledby="home-title">
+    <div class="card">
+      <p class="muted small" id="home-date"></p>
+      <h2 id="home-title" class="card-title">Hi</h2>
+      <p id="home-msg" class="msg" role="status" hidden></p>
+      <div class="target">
+        <span class="target-label">Today's target</span>
+        <span class="big-number" id="home-target">–</span>
+        <span class="target-unit">kcal</span>
+      </div>
+      <p class="muted" id="home-diff"></p>
+      <div class="stat-grid">
+        <div class="stat"><span class="stat-label">Maintenance</span><span class="stat-value" id="home-maint">–</span></div>
+        <div class="stat"><span class="stat-label">BMI</span><span class="stat-value" id="home-bmi">–</span></div>
+        <div class="stat" id="home-bf-wrap" hidden><span class="stat-label">Body fat</span><span class="stat-value" id="home-bf">–</span></div>
+      </div>
+      <div class="protein" id="home-protein"></div>
+      <div id="home-notes"></div>
+    </div>
+    <p class="muted center small soon">Food and workout tracking arrive in the next updates.</p>
+    <button type="button" class="btn-secondary" id="to-profile">Profile &amp; settings</button>
+  </section>
+
+  <!-- YOUR NUMBERS (after setup) -->
+  <section id="view-numbers" class="card view" hidden aria-labelledby="numbers-title">
+    <h2 id="numbers-title" class="card-title" tabindex="-1">Your numbers</h2>
+    <p class="muted" id="numbers-sub">Here's your starting point. These update whenever you change your profile.</p>
+    <div class="target">
+      <span class="target-label">Daily target</span>
+      <span class="big-number" id="n-target">–</span>
+      <span class="target-unit">kcal</span>
+    </div>
+    <p class="muted" id="n-diff"></p>
+    <div class="stat-grid">
+      <div class="stat"><span class="stat-label">Maintenance</span><span class="stat-value" id="n-maint">–</span></div>
+      <div class="stat"><span class="stat-label">BMI</span><span class="stat-value" id="n-bmi">–</span></div>
+      <div class="stat" id="n-bf-wrap" hidden><span class="stat-label">Body fat</span><span class="stat-value" id="n-bf">–</span></div>
+    </div>
+    <div class="protein" id="n-protein"></div>
+    <div id="n-notes"></div>
+    <p class="muted small" id="n-formula"></p>
+    <button type="button" class="btn-primary" id="numbers-done">Let's go</button>
+  </section>
+
+  <!-- PROFILE & SETTINGS -->
+  <section id="view-profile" class="view" hidden aria-labelledby="profile-title">
+    <div class="card">
+      <h2 id="profile-title" class="card-title" tabindex="-1">Your details</h2>
+      <p class="muted small">Signed in as <b id="home-email" class="email"></b></p>
+      <form id="profile-form" novalidate>
+        <label for="p-name">Name</label>
+        <input id="p-name" type="text" maxlength="40" autocomplete="nickname" spellcheck="false">
+        <fieldset class="inline-choices"><legend>Sex at birth</legend>
+          <label class="pill"><input type="radio" name="p-sex" value="female"><span>Female</span></label>
+          <label class="pill"><input type="radio" name="p-sex" value="male"><span>Male</span></label>
+        </fieldset>
+        <div class="grid-3">
+          <div><label for="p-age">Age</label><div class="num-row"><input id="p-age" type="text" inputmode="numeric" maxlength="3"><span class="unit">yrs</span></div></div>
+          <div><label for="p-height">Height</label><div class="num-row"><input id="p-height" type="text" inputmode="decimal" maxlength="5"><span class="unit">cm</span></div></div>
+          <div><label for="p-weight">Weight</label><div class="num-row"><input id="p-weight" type="text" inputmode="decimal" maxlength="5"><span class="unit">kg</span></div></div>
+        </div>
+        <label for="p-activity">How active are you?</label>
+        <select id="p-activity">
+          <option value="sedentary">Mostly sitting</option>
+          <option value="light">Lightly active (1–3×/week)</option>
+          <option value="moderate">Active (3–5×/week)</option>
+          <option value="very">Very active (6–7×/week)</option>
+          <option value="extreme">Athlete level</option>
+        </select>
+        <fieldset class="inline-choices"><legend>Goal</legend>
+          <label class="pill"><input type="radio" name="p-goal" value="cut"><span>Cut</span></label>
+          <label class="pill"><input type="radio" name="p-goal" value="maintain"><span>Maintain</span></label>
+          <label class="pill"><input type="radio" name="p-goal" value="bulk"><span>Bulk</span></label>
+        </fieldset>
+        <p class="section-sub">Body fat (optional, cm)</p>
+        <div class="grid-3">
+          <div><label for="p-neck">Neck</label><input id="p-neck" type="text" inputmode="decimal" maxlength="5"></div>
+          <div><label for="p-waist">Waist</label><input id="p-waist" type="text" inputmode="decimal" maxlength="5"></div>
+          <div class="p-hip-wrap"><label for="p-hip">Hips</label><input id="p-hip" type="text" inputmode="decimal" maxlength="5"></div>
+        </div>
+        <p id="profile-msg" class="msg" role="alert" hidden></p>
+        <button type="submit" class="btn-primary" id="profile-save">Save changes</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">App colour</h2>
+      <div class="swatches" id="p-swatches"></div>
+      <label class="toggle-row"><input type="checkbox" id="p-surprise"><span class="toggle" aria-hidden="true"></span><span><b>Surprise me</b><small>A different colour every time you open Taakat</small></span></label>
+      <p id="colour-msg" class="msg" role="status" hidden></p>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Change password</h2>
+      <form id="pw-form" novalidate>
+        <label for="pw-new">New password</label>
+        <div class="pw-wrap">
+          <input id="pw-new" type="password" autocomplete="new-password" maxlength="72">
+          <button type="button" class="pw-toggle" data-target="pw-new" aria-controls="pw-new" aria-pressed="false">Show</button>
+        </div>
+        <label for="pw-confirm">Type it again</label>
+        <input id="pw-confirm" type="password" autocomplete="new-password" maxlength="72">
+        <p id="pw-msg" class="msg" role="alert" hidden></p>
+        <button type="submit" class="btn-secondary" id="pw-save">Change password</button>
+      </form>
+    </div>
+
+    <button type="button" class="btn-secondary" id="profile-back">Back to Today</button>
+    <button type="button" class="btn-link danger-link" id="logout-btn">Log out</button>
   </section>
 
   <!-- CAN'T START -->
