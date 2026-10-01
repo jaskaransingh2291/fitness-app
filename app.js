@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.3.1';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.3.2';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -196,35 +196,29 @@
 
   /* ---------- Fast tap ----------
      On phones, tapping a button while the keyboard is open closes the keyboard FIRST, and the page
-     jumps before the tap lands, so the first tap "misses". Every button and every tappable pill/card
-     acts the moment the finger lifts (before anything moves). The phone's late "click" that follows
-     is then ignored. A finger that slid (scrolling a list) is NOT a tap. Mouse clicks work as normal. */
+     jumps before the phone sends its "click", so the click lands in the wrong spot and the tap
+     "misses". So for touch we don't wait for the phone's click at all: when the finger lifts on a
+     button / pill / choice card / colour / switch, we cancel the phone's own click and press the
+     thing the finger went down on ourselves. A finger that slid (scrolling), a long press, or a tap
+     that just stops a moving list is left to the phone as normal. Mouse clicks are unchanged. */
   var TAP_SEL = 'button, label.pill, label.choice, label.swatch, label.toggle-row';
-  var fastTap = null;   // { t, x, y } of the last finger-up we acted on
-  var tapDown = null;   // { el, x, y, id } where the finger went down
+  var touchTap = null;     // { el, x, y, t } where the finger went down
+  var scrollTimes = [];   // when the page/list last moved (to spot a list still gliding)
   function tapTarget(node) {
     var t = node && node.closest ? node.closest(TAP_SEL) : null;
     return t && !t.hasAttribute('data-slow-tap') ? t : null;
   }
   function tapUsable(t) {
-    if (!t || t.getClientRects().length === 0) return false;   // hidden (fixed bars still count as visible)
+    if (!t || !t.isConnected || t.getClientRects().length === 0) return false;   // gone or hidden
     if (t.tagName === 'BUTTON') return !t.disabled;
     var input = t.control || t.querySelector('input');
-    return !!input && !input.disabled;
+    return !!input && !input.disabled && (input.type === 'radio' || input.type === 'checkbox');
   }
-  document.addEventListener('pointerdown', function (ev) {
-    if (ev.pointerType === 'mouse' || !ev.isPrimary) { tapDown = null; return; }
-    var t = tapTarget(ev.target);
-    tapDown = t ? { el: t, x: ev.clientX, y: ev.clientY, id: ev.pointerId } : null;
-  }, true);
-  document.addEventListener('pointercancel', function () { tapDown = null; }, true);   // the phone took over (scrolling)
-  document.addEventListener('pointerup', function (ev) {
-    var down = tapDown; tapDown = null;
-    if (!down || ev.pointerType === 'mouse' || ev.pointerId !== down.id) return;
-    if (Math.abs(ev.clientX - down.x) > 10 || Math.abs(ev.clientY - down.y) > 10) return;   // finger slid = scroll, not a tap
-    var t = tapTarget(document.elementFromPoint(ev.clientX, ev.clientY));
-    if (t !== down.el || !tapUsable(t)) return;   // finger must go down AND up on the same thing
-    fastTap = { t: Date.now(), x: ev.clientX, y: ev.clientY };
+  function pressTap(t) {
+    // Close the keyboard first, like a normal tap does (this also lets typed text "settle").
+    var a = document.activeElement;
+    if (a && a !== t && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) a.blur();
+    if (!tapUsable(t)) return;   // blurring can change things (e.g. disable a button)
     if (t.tagName === 'BUTTON') {
       if (t.type === 'submit' && t.form) {
         if (typeof t.form.requestSubmit === 'function') t.form.requestSubmit(t);
@@ -234,25 +228,43 @@
       }
       return;
     }
-    // A pill / choice card / colour / switch: tick its hidden input and tell the page it changed.
     var input = t.control || t.querySelector('input');
-    if (input.type === 'radio') {
-      if (input.checked) return;
-      input.checked = true;
-    } else if (input.type === 'checkbox') {
-      input.checked = !input.checked;
-    } else { fastTap = null; return; }
+    if (input.type === 'radio') { if (input.checked) return; input.checked = true; }
+    else { input.checked = !input.checked; }
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  document.addEventListener('scroll', function () {
+    scrollTimes.push(Date.now()); if (scrollTimes.length > 3) scrollTimes.shift();
   }, true);
-  document.addEventListener('click', function (ev) {
-    // Ignore only the phone's own leftover click for that same finger-up: same spot, straight after.
-    // Any other tap (a different spot, or later) works normally.
-    if (!fastTap || !ev.isTrusted) return;
-    var same = Math.abs(ev.clientX - fastTap.x) < 12 && Math.abs(ev.clientY - fastTap.y) < 12 && Date.now() - fastTap.t < 800;
-    if (same) { ev.preventDefault(); ev.stopImmediatePropagation(); }
-    fastTap = null;   // one-shot
-  }, true);
+  function listGliding() {
+    // A gliding list fires scroll events every frame; a single jump (keyboard, list getting shorter) is not gliding.
+    var now = Date.now();
+    return scrollTimes.length === 3 && now - scrollTimes[0] < 200 && now - scrollTimes[2] < 80;
+  }
+  document.addEventListener('touchstart', function (ev) {
+    touchTap = null;
+    if (ev.touches.length !== 1) return;
+    if (listGliding()) return;   // this touch is stopping a moving list, not a tap
+    var t = tapTarget(ev.target);
+    if (t) touchTap = { el: t, x: ev.touches[0].clientX, y: ev.touches[0].clientY, t: Date.now() };
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', function (ev) {
+    if (!touchTap) return;
+    var p = ev.touches[0];
+    if (!p || Math.abs(p.clientX - touchTap.x) > 10 || Math.abs(p.clientY - touchTap.y) > 10) touchTap = null;   // sliding = scrolling
+  }, { capture: true, passive: true });
+  document.addEventListener('touchcancel', function () { touchTap = null; }, true);
+  document.addEventListener('touchend', function (ev) {
+    var d = touchTap; touchTap = null;
+    if (!d || ev.touches.length) return;
+    var p = ev.changedTouches[0];
+    if (!p || Math.abs(p.clientX - d.x) > 10 || Math.abs(p.clientY - d.y) > 10) return;
+    if (Date.now() - d.t > 900) return;   // long press: leave it to the phone
+    if (!tapUsable(d.el)) return;
+    ev.preventDefault();   // cancels the phone's own late (and possibly misplaced) click
+    pressTap(d.el);
+  }, { capture: true, passive: false });
 
 
   /* ---------- Automatic updates ----------

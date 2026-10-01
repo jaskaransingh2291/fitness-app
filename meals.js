@@ -321,7 +321,18 @@
       if (f.est) bits.push('estimate');
       return bits.join(' · ');
     }
+    // Never rebuild the list while a finger is on it (the button under the finger would vanish).
+    var fingerOnList = false, searchWaiting = false;
+    $('af-results').addEventListener('touchstart', function () { fingerOnList = true; }, { passive: true });
+    function fingerUp() {
+      if (!fingerOnList) return;
+      fingerOnList = false;
+      if (searchWaiting) { searchWaiting = false; setTimeout(runSearch, 0); }
+    }
+    document.addEventListener('touchend', fingerUp, { passive: true });
+    document.addEventListener('touchcancel', fingerUp, { passive: true });
     function runSearch() {
+      if (fingerOnList) { searchWaiting = true; return; }
       var list = $('af-results'); list.textContent = '';
       var q = $('af-search').value;
       if (!q.trim()) {
