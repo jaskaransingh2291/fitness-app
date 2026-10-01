@@ -130,10 +130,51 @@
     return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
   }
 
+  /* Calendar days as 'YYYY-MM-DD' text. Maths is done at noon UTC so clock changes (DST) can't skip or repeat a day. */
+  function isoOk(iso) { return typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso); }
+  function isoToDate(iso) { var p = iso.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2], 12)); }
+  function dateToIso(d) {
+    var m = d.getUTCMonth() + 1, day = d.getUTCDate();
+    return d.getUTCFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+  function addDays(iso, n) { var d = isoToDate(iso); d.setUTCDate(d.getUTCDate() + n); return dateToIso(d); }
+  function daysBetween(a, b) { return Math.round((isoToDate(b) - isoToDate(a)) / 86400000); }   // b − a
+  function dayName(iso, today) {
+    var diff = daysBetween(iso, today || localDate());
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    try { return isoToDate(iso).toLocaleDateString('en-CA', { weekday: 'long', timeZone: 'UTC' }); } catch (e) { return iso; }
+  }
+  function longDate(iso) {
+    try { return isoToDate(iso).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return iso; }
+  }
+  function shortDate(iso) {
+    try { return isoToDate(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch (e) { return iso; }
+  }
+
+  /* Past 7 days estimate.
+     days: [{ date, eaten (kcal or null if nothing logged), maintenance, savedTarget (bool) }]
+     Each logged day counts (eaten − maintenance). The total ÷ 7,700 kcal ≈ kg of body weight. */
+  var KCAL_PER_KG = 7700, WEEK_MIN_DAYS = 3;
+  function weekEstimate(days) {
+    var logged = days.filter(function (d) { return d.eaten !== null && d.eaten !== undefined && d.maintenance > 0; });
+    var total = 0;
+    logged.forEach(function (d) { total += d.eaten - d.maintenance; });
+    total = Math.round(total);
+    var out = { loggedDays: logged.length, totalDiff: total, ready: logged.length >= WEEK_MIN_DAYS, kg: null, direction: null };
+    if (!out.ready) return out;
+    var kg = Math.round(Math.abs(total) / KCAL_PER_KG * 10) / 10;
+    out.kg = kg;
+    out.direction = kg === 0 ? 'same' : (total < 0 ? 'lost' : 'gained');
+    return out;
+  }
+
   var api = {
     ACTIVITY: ACTIVITY, GOAL_ADJUST: GOAL_ADJUST, SAFE_FLOOR: SAFE_FLOOR, LIMITS: LIMITS,
     parseNumber: parseNumber, inRange: inRange, navyBodyFat: navyBodyFat, bmi: bmi, numbers: numbers,
-    cmToFeetInches: cmToFeetInches, kgToLb: kgToLb, localDate: localDate
+    cmToFeetInches: cmToFeetInches, kgToLb: kgToLb, localDate: localDate,
+    isoOk: isoOk, addDays: addDays, daysBetween: daysBetween, dayName: dayName, longDate: longDate, shortDate: shortDate,
+    weekEstimate: weekEstimate, KCAL_PER_KG: KCAL_PER_KG, WEEK_MIN_DAYS: WEEK_MIN_DAYS
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TaakatCalc = api;

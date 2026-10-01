@@ -114,6 +114,7 @@
     var foods = null, foodsLoading = null;
     var day = null;              // YYYY-MM-DD being shown
     var entries = [];            // food_log rows for that day
+    var dayTarget = null;        // that day's saved daily_targets row (used for earlier days), or null
     var dayToken = 0;
     var editing = null;          // food_log row being edited, or null for a new entry
     var chosen = null;           // { food, servingIndex }
@@ -145,13 +146,24 @@
     function showDay(d) {
       day = d || C.localDate();
       var token = ++dayToken;
+      var isPast = day !== C.localDate();
+      if (!isPast) dayTarget = null;
+      else if (!dayTarget || dayTarget.log_date !== day) dayTarget = null;
       renderDay(true);
       api.setMsg('day-msg', ''); $('day-retry').hidden = true;
-      return sb.from('food_log').select('*').eq('user_id', api.me().id).eq('log_date', day).order('created_at', { ascending: true })
-        .then(function (res) {
+      // For an earlier day, also fetch the target that was saved that day (a missing one is fine).
+      var targetQ = isPast
+        ? sb.from('daily_targets').select('log_date,goal,weight_kg,maintenance_kcal,target_kcal').eq('user_id', api.me().id).eq('log_date', day).maybeSingle()
+          .then(function (r) { return r && !r.error ? r.data : null; }, function () { return null; })
+        : Promise.resolve(null);
+      var foodQ = sb.from('food_log').select('*').eq('user_id', api.me().id).eq('log_date', day).order('created_at', { ascending: true });
+      return Promise.all([foodQ, targetQ])
+        .then(function (both) {
+          var res = both[0];
           if (token !== dayToken) return;
           if (res.error) throw res.error;
           entries = res.data || [];
+          dayTarget = both[1] || null;
           renderDay(false);
         }).catch(function (e) {
           if (token !== dayToken) return;
@@ -164,11 +176,23 @@
     }
     $('day-retry').addEventListener('click', function () { showDay(day); });
 
-    function renderDay(loading, failed) {
+    /* Target + maintenance for the day on screen: today = your profile now; an earlier day = what was
+       saved that day (falls back to your current numbers if nothing was saved). */
+    function dayNumbers() {
       var p = api.profile();
-      var n = C.numbers(p);
+      var isPast = day && day !== C.localDate();
+      var row = isPast && dayTarget && dayTarget.log_date === day ? dayTarget : null;
+      var n = C.numbers(row ? Object.assign({}, p, { weight_kg: Number(row.weight_kg) || p.weight_kg, goal: row.goal || p.goal }) : p);
+      if (n.ok && row) { n.target = Number(row.target_kcal) || n.target; n.maintenance = Number(row.maintenance_kcal) || n.maintenance; }
+      return { n: n, isPast: !!isPast, fromSaved: !!row };
+    }
+    function renderDay(loading, failed) {
+      var dn = dayNumbers(), n = dn.n, isPast = dn.isPast;
       var t = totals(entries);
       var target = n.ok ? n.target : 0, maint = n.ok ? n.maintenance : 0;
+      var note = $('day-note');
+      note.hidden = loading || !isPast || dn.fromSaved;
+      note.textContent = 'No target was saved for this day, so your current target is used.';
       // gauge: eaten vs target
       var left = target - t.kcal, over = left < 0;
       var frac = target > 0 ? Math.min(1, t.kcal / target) : 0;
@@ -177,14 +201,14 @@
       fill.style.strokeDasharray = (len * frac).toFixed(1) + ' ' + len;
       fill.classList.toggle('over', over);
       $('home-left').textContent = loading ? '…' : fmt(Math.abs(left));
-      $('home-left-label').textContent = over ? 'kcal over target' : 'kcal left';
-      $('home-eaten-line').textContent = loading ? 'Loading today’s food…' : 'Eaten ' + fmt(t.kcal) + ' of ' + fmt(target) + ' kcal';
+      $('home-left-label').textContent = over ? 'kcal over target' : (isPast ? 'kcal under target' : 'kcal left');
+      $('home-eaten-line').textContent = loading ? (isPast ? 'Loading that day’s food…' : 'Loading today’s food…') : 'Eaten ' + fmt(t.kcal) + ' of ' + fmt(target) + ' kcal';
       var overEl = $('home-over');
       overEl.hidden = !over || loading;
-      if (over) overEl.textContent = 'You’re ' + fmt(-left) + ' kcal over today’s target.';
+      if (over) overEl.textContent = isPast ? 'You were ' + fmt(-left) + ' kcal over that day’s target.' : 'You’re ' + fmt(-left) + ' kcal over today’s target.';
       // deficit / surplus vs maintenance
       var vsMaint = maint - t.kcal;
-      $('home-def-label').textContent = vsMaint >= 0 ? 'Deficit so far' : 'Surplus so far';
+      $('home-def-label').textContent = (vsMaint >= 0 ? 'Deficit' : 'Surplus') + (isPast ? '' : ' so far');
       var defEl = $('home-def'); defEl.textContent = fmt(Math.abs(vsMaint)); defEl.appendChild(el('small', null, 'kcal'));
       $('home-carbs').textContent = g1(t.c);
       $('home-fat').textContent = g1(t.f);
@@ -265,6 +289,13 @@
       });
     }
 
+    /* "Adding to Tuesday, September 29" on the logging screens when it isn't today. */
+    function setForDay(id, editingRow) {
+      var box = $(id), past = day && day !== C.localDate();
+      box.hidden = !past;
+      box.textContent = past ? (editingRow ? 'From ' : 'Adding to ') + C.longDate(day) : '';
+    }
+
     /* ---------- Log food: search ---------- */
     var searchTimer = null;
     function openAdd(meal) {
@@ -272,6 +303,8 @@
       setRadio('af-meal', meal || defaultMeal());
       $('af-search').value = '';
       $('af-results').textContent = '';
+      if (!day) day = api.viewedDay();
+      setForDay('af-day', null);
       api.show('addfood');
       api.focusQuiet($('af-title'));
       $('af-status').textContent = 'Loading foods…';
@@ -413,6 +446,7 @@
       $('pf-save').dataset.label = $('pf-save').textContent;
       $('pf-delete').hidden = !entry; resetDelete('pf-delete');
       api.setMsg('pf-msg', '');
+      setForDay('pf-day', entry);
       updatePreview();
       api.show('portion');
       api.focusQuiet($('pf-title'));
@@ -589,6 +623,7 @@
       $('cf-save').dataset.label = $('cf-save').textContent;
       $('cf-delete').hidden = !entry; resetDelete('cf-delete');
       api.setMsg('cf-msg', '');
+      setForDay('cf-day', entry);
       Array.prototype.forEach.call(document.querySelectorAll('#cf-form [aria-invalid]'), function (x) { x.removeAttribute('aria-invalid'); });
       api.show('custom');
       api.focusQuiet($('cf-title'));
@@ -628,12 +663,103 @@
 
     $('log-food').addEventListener('click', function () { openAdd(null); });
 
+    /* ---------- Past 7 days ---------- */
+    var weekToken = 0;
+    function openWeek() {
+      var token = ++weekToken;
+      var today = C.localDate(), last = C.addDays(today, -1), first = C.addDays(today, -7);
+      $('wk-range').textContent = C.shortDate(first) + ' – ' + C.shortDate(last) + ' (today isn’t counted yet)';
+      $('wk-headline').textContent = 'Working it out…';
+      $('wk-sub').textContent = '';
+      $('wk-result').className = 'wk-result';
+      $('wk-days').textContent = '';
+      api.setMsg('wk-msg', ''); $('wk-retry').hidden = true;
+      api.show('week');
+      api.focusQuiet($('wk-title'));
+      var uid = api.me().id;
+      Promise.all([
+        sb.from('food_log').select('log_date,kcal').eq('user_id', uid).gte('log_date', first).lte('log_date', last).limit(5000),
+        sb.from('daily_targets').select('log_date,maintenance_kcal').eq('user_id', uid).gte('log_date', first).lte('log_date', last)
+      ]).then(function (both) {
+        if (token !== weekToken) return;
+        if (both[0].error) throw both[0].error;
+        var eaten = {}, maint = {};
+        (both[0].data || []).forEach(function (r) { eaten[r.log_date] = (eaten[r.log_date] || 0) + (Number(r.kcal) || 0); });
+        if (!both[1].error) (both[1].data || []).forEach(function (r) { maint[r.log_date] = Number(r.maintenance_kcal) || 0; });
+        var now = C.numbers(api.profile());
+        var fallback = now.ok ? now.maintenance : 0;
+        var days = [];
+        for (var i = 7; i >= 1; i--) {
+          var d = C.addDays(today, -i);
+          days.push({ date: d, eaten: d in eaten ? eaten[d] : null, maintenance: maint[d] || fallback, savedTarget: !!maint[d] });
+        }
+        renderWeek(days, today);
+      }).catch(function (e) {
+        if (token !== weekToken) return;
+        console.warn('Week load failed:', e && (e.code || e.message));
+        $('wk-headline').textContent = 'Couldn’t load your past 7 days.';
+        api.setMsg('wk-msg', api.friendly(e) + ' Your logged food is safe.');
+        $('wk-retry').hidden = false;
+      });
+    }
+    function signed(n) { return (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n)); }
+    function renderWeek(days, today) {
+      var est = C.weekEstimate(days);
+      var res = $('wk-result');
+      if (!est.ready) {
+        res.className = 'wk-result waiting';
+        $('wk-headline').textContent = 'Log at least ' + C.WEEK_MIN_DAYS + ' days to see your estimate.';
+        $('wk-sub').textContent = 'You have ' + est.loggedDays + ' of the last 7 days logged so far.';
+      } else {
+        res.className = 'wk-result ready ' + est.direction;
+        $('wk-headline').textContent = est.direction === 'same'
+          ? 'Based on the past 7 days, your weight has likely stayed about the same.'
+          : 'Based on the past 7 days, you have likely ' + est.direction + ' about ' + est.kg + ' kg.';
+        var tot = est.totalDiff;
+        $('wk-sub').textContent = 'From ' + est.loggedDays + ' logged day' + (est.loggedDays === 1 ? '' : 's') + ' · ' +
+          (tot < 0 ? fmt(-tot) + ' kcal below maintenance in total' : tot > 0 ? fmt(tot) + ' kcal above maintenance in total' : 'right on maintenance');
+      }
+      var list = $('wk-days'); list.textContent = '';
+      var anyFallback = false;
+      days.slice().reverse().forEach(function (d) {
+        var li = el('li');
+        var b = el('button', 'wk-day'); b.type = 'button';
+        var left = el('span', 'entry-text');
+        var label = C.dayName(d.date, today);
+        left.appendChild(el('span', 'entry-name', (label === 'Yesterday' ? 'Yesterday · ' : '') + C.shortDate(d.date)));
+        var right = el('span', 'wk-diff');
+        if (d.eaten === null) {
+          left.appendChild(el('span', 'entry-meta', 'Nothing logged — not counted'));
+          b.classList.add('skipped');
+          right.textContent = '–';
+        } else {
+          var diff = Math.round(d.eaten - d.maintenance);
+          if (!d.savedTarget) anyFallback = true;
+          left.appendChild(el('span', 'entry-meta', 'Ate ' + fmt(d.eaten) + ' · maintenance ' + fmt(d.maintenance) + (d.savedTarget ? '' : '*')));
+          if (d.maintenance > 0 && d.eaten < d.maintenance / 2) left.appendChild(el('span', 'wk-flag', 'Only ' + fmt(d.eaten) + ' kcal logged — anything missing?'));
+          right.textContent = signed(diff);
+          right.appendChild(el('small', null, 'kcal'));
+        }
+        b.appendChild(left); b.appendChild(right);
+        b.setAttribute('aria-label', C.longDate(d.date) + ': ' + (d.eaten === null ? 'nothing logged' : 'ate ' + fmt(d.eaten) + ' kilocalories, maintenance ' + fmt(d.maintenance)) + '. Open this day.');
+        b.addEventListener('click', function () { api.showToday('', { day: d.date }); });
+        li.appendChild(b); list.appendChild(li);
+      });
+      if (anyFallback) {
+        var li2 = el('li', 'wk-foot muted small', '* No numbers were saved that day, so your current maintenance is used.');
+        list.appendChild(li2);
+      }
+    }
+    $('wk-back').addEventListener('click', function () { api.showToday(''); });
+    $('wk-retry').addEventListener('click', openWeek);
+
     return {
       showDay: showDay,
       redraw: function () { renderDay(false); },
       day: function () { return day; },
       openAdd: openAdd,
-      clear: function () { entries = []; day = null; recents = []; editing = null; dayToken++; }
+      openWeek: openWeek,
+      clear: function () { entries = []; day = null; dayTarget = null; recents = []; editing = null; dayToken++; weekToken++; }
     };
   }
 

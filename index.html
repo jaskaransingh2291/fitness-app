@@ -19,12 +19,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;family=Sora:wght@700;800&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.3.2">
-<script src="vendor/supabase.js?v=3.3.2" defer></script>
-<script src="config.js?v=3.3.2" defer></script>
-<script src="calc.js?v=3.3.2" defer></script>
-<script src="meals.js?v=3.3.2" defer></script>
-<script src="app.js?v=3.3.2" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.4.0">
+<script src="vendor/supabase.js?v=3.4.0" defer></script>
+<script src="config.js?v=3.4.0" defer></script>
+<script src="calc.js?v=3.4.0" defer></script>
+<script src="meals.js?v=3.4.0" defer></script>
+<script src="app.js?v=3.4.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -236,8 +236,14 @@
   <!-- HOME (Today) -->
   <section id="view-home" class="view home" hidden aria-labelledby="home-title">
     <div class="card day-card">
-      <p class="muted small" id="home-date"></p>
       <h2 id="home-title" class="card-title">Hi</h2>
+      <div class="day-nav" role="group" aria-label="Choose a day">
+        <button type="button" class="day-step" id="day-prev" aria-label="Previous day">&#8249;</button>
+        <p class="day-label" aria-live="polite"><b id="day-name">Today</b><span id="home-date"></span></p>
+        <button type="button" class="day-step" id="day-next" aria-label="Next day">&#8250;</button>
+      </div>
+      <button type="button" class="btn-link day-today" id="day-today" hidden>Back to today</button>
+      <p class="muted small day-note" id="day-note" hidden></p>
       <p id="home-msg" class="msg" role="status" hidden></p>
       <div class="gauge-wrap">
         <svg class="gauge" viewBox="0 0 220 124" aria-hidden="true" focusable="false">
@@ -263,8 +269,10 @@
     <p id="day-msg" class="msg" role="alert" hidden></p>
     <button type="button" class="btn-secondary" id="day-retry" hidden>Try again</button>
 
+    <button type="button" class="btn-secondary week-btn" id="to-week"><span class="week-btn-text"><b>Past 7 days</b><small>How your weight is likely changing</small></span><span aria-hidden="true">&#8250;</span></button>
+
     <div class="card numbers-card">
-      <h2 class="card-title small-title">Your numbers</h2>
+      <h2 class="card-title small-title" id="numbers-card-title">Your numbers</h2>
       <div class="stat-grid">
         <div class="stat"><span class="stat-label">Target</span><span class="stat-value" id="home-target">–</span></div>
         <div class="stat"><span class="stat-label">Maintenance</span><span class="stat-value" id="home-maint">–</span></div>
@@ -284,6 +292,7 @@
       <button type="button" class="btn-link back-link" id="af-back">&#8249; Today</button>
       <h2 id="af-title" class="card-title" tabindex="-1">Log food</h2>
     </div>
+    <p class="for-day" id="af-day" hidden></p>
     <fieldset class="inline-choices meal-chips" id="af-meals"><legend class="sr-only">Meal</legend>
       <label class="pill"><input type="radio" name="af-meal" value="breakfast"><span>Breakfast</span></label>
       <label class="pill"><input type="radio" name="af-meal" value="lunch"><span>Lunch</span></label>
@@ -311,6 +320,7 @@
       <button type="button" class="btn-link back-link" id="pf-back">&#8249; Back</button>
     </div>
     <h2 id="pf-title" class="card-title" tabindex="-1">Food</h2>
+    <p class="for-day" id="pf-day" hidden></p>
     <p class="chips-row" id="pf-chips"></p>
     <p class="muted small" id="pf-source"></p>
     <p class="note-info" id="pf-note" hidden></p>
@@ -352,6 +362,7 @@
       <button type="button" class="btn-link back-link" id="cf-back">&#8249; Back</button>
     </div>
     <h2 id="cf-title" class="card-title" tabindex="-1">Add your own food</h2>
+    <p class="for-day" id="cf-day" hidden></p>
     <p class="muted small">Use the numbers from the package label or the restaurant&rsquo;s website.</p>
     <form id="cf-form" novalidate>
       <label for="cf-name">Food name</label>
@@ -400,6 +411,28 @@
   </section>
 
   <!-- PROFILE & SETTINGS -->
+  <!-- PAST 7 DAYS -->
+  <section id="view-week" class="card view" hidden aria-labelledby="wk-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="wk-back">&#8249; Today</button>
+      <h2 id="wk-title" class="card-title" tabindex="-1">Past 7 days</h2>
+    </div>
+    <p class="muted small" id="wk-range"></p>
+    <div class="wk-result" id="wk-result" aria-live="polite">
+      <p class="wk-headline" id="wk-headline">Working it out…</p>
+      <p class="muted small" id="wk-sub"></p>
+    </div>
+    <p id="wk-msg" class="msg" role="alert" hidden></p>
+    <button type="button" class="btn-secondary" id="wk-retry" hidden>Try again</button>
+    <h3 class="field-legend wk-list-title">Day by day <span class="muted">(tap a day to see or fix it)</span></h3>
+    <ul class="wk-days" id="wk-days"></ul>
+    <div class="wk-how">
+      <h3 class="field-legend">How it&rsquo;s worked out</h3>
+      <p class="muted small">For each day you logged food: what you ate minus that day&rsquo;s maintenance calories. Add those up, and every 7,700 kcal is about 1 kg of body weight. Days with nothing logged are skipped, and today isn&rsquo;t counted until it&rsquo;s over.</p>
+      <p class="muted small">It&rsquo;s an estimate. Water, salt, and food you forgot to log can make the scale say something different.</p>
+    </div>
+  </section>
+
   <section id="view-profile" class="view" hidden aria-labelledby="profile-title">
     <div class="card">
       <h2 id="profile-title" class="card-title" tabindex="-1">Your details</h2>

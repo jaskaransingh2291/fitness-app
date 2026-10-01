@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.3.2';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.4.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -40,8 +40,8 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week'];
   var currentView = null;
   function show(name, focusId) {
     VIEWS.forEach(function (v) { var el = $('view-' + v); if (el) el.hidden = (v !== name); });
@@ -308,7 +308,8 @@
     if (document.visibilityState !== 'visible') return;
     if (Date.now() - lastUpdateCheck > 60000) checkForUpdate(false);
     // Left open overnight? Move Today to the new day.
-    if (currentView === 'home' && meals && meals.day() && meals.day() !== C.localDate()) showToday('');
+    // (Only when you were looking at "Today" — if you chose an earlier day, stay on it.)
+    if (currentView === 'home' && !homeDay && meals && meals.day() && meals.day() !== C.localDate()) showToday('');
   });
   // Tidy the address bar after an update reload (only the ?v= part; never touch reset links).
   if (/^\?v=[\w.%-]+$/.test(window.location.search) && !window.location.hash) {
@@ -659,7 +660,7 @@
       logoutBusy = false;
       setBusy(btn, false);
       userLoggedOutOnPurpose = false;
-      me = null; profile = null;
+      me = null; profile = null; homeDay = null;
       clearDrafts();
       if (meals) meals.clear();
       showLogin('');
@@ -677,10 +678,13 @@
   var stepIndex = 0;
   var answers = {};
   var targetsSavedFor = '';
+  var homeDay = null;       // the day Today is showing: null = follow today; else an earlier 'YYYY-MM-DD'
+  var DAYS_BACK = 365;      // how far back the day arrows go
   var meals = (window.TaakatMeals && C) ? window.TaakatMeals({
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; },
-    showToday: function (note, opts) { showToday(note, opts); }, version: APP_VERSION
+    showToday: function (note, opts) { showToday(note, opts); }, version: APP_VERSION,
+    viewedDay: function () { return viewedDay(); }
   }) : null;
 
   function fmt(n) { return Number(n).toLocaleString('en-CA'); }
@@ -715,6 +719,7 @@
     if (!session || !session.user) { showLogin(''); return; }
     if (!C || !meals) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
     me = { id: session.user.id, email: session.user.email || '' };
+    homeDay = null;
     homeShownFor = me.id;
     $('home-email').textContent = me.email;
     pendingHomeNote = note || '';
@@ -1055,23 +1060,45 @@
   }
   $('numbers-done').addEventListener('click', function () { showToday(''); });
 
+  function viewedDay() {
+    var today = C.localDate();
+    if (homeDay && (!C.isoOk(homeDay) || homeDay >= today || C.daysBetween(homeDay, today) > DAYS_BACK)) homeDay = null;
+    return homeDay || today;
+  }
   function showToday(note, opts) {
     if (!profile) { loadProfile(); return; }
     opts = opts || {};
+    if (opts.day !== undefined) homeDay = opts.day;
+    var today = C.localDate(), d = viewedDay();
     $('home-title').textContent = 'Hi, ' + profile.display_name;
-    try {
-      $('home-date').textContent = new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
-    } catch (e) { $('home-date').textContent = C.localDate(); }
+    $('day-name').textContent = C.dayName(d, today);
+    $('home-date').textContent = C.longDate(d);
+    $('day-next').disabled = d >= today;
+    $('day-prev').disabled = C.daysBetween(d, today) >= DAYS_BACK;
+    $('day-today').hidden = d === today;
+    $('view-home').classList.toggle('past-day', d !== today);
+    $('numbers-card-title').textContent = d === today ? 'Your numbers' : 'Your numbers right now';
     renderNumbers('home', profile);
     setMsg('home-msg', note || '', 'ok');
     show('home');
-    if (opts.keepEntries && meals.day() === C.localDate()) meals.redraw();
-    else meals.showDay(C.localDate());
+    if (opts.keepEntries && meals.day() === d) meals.redraw();
+    else meals.showDay(d);
     if (targetsSavedFor !== C.localDate()) {
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }
   }
   $('to-profile').addEventListener('click', function () { openProfile(); });
+  function stepDay(n) {
+    var today = C.localDate();
+    var d = C.addDays(viewedDay(), n);
+    if (d > today) d = today;
+    if (C.daysBetween(d, today) > DAYS_BACK) return;
+    showToday('', { day: d === today ? null : d });
+  }
+  $('day-prev').addEventListener('click', function () { stepDay(-1); });
+  $('day-next').addEventListener('click', function () { stepDay(1); });
+  $('day-today').addEventListener('click', function () { showToday('', { day: null }); });
+  $('to-week').addEventListener('click', function () { meals.openWeek(); });
   $('profile-back').addEventListener('click', function () { showToday(''); });
 
   /* ---------- profile & settings ---------- */
