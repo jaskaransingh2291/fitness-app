@@ -19,11 +19,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;family=Sora:wght@700;800&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.2.0">
-<script src="vendor/supabase.js?v=3.2.0" defer></script>
-<script src="config.js?v=3.2.0" defer></script>
-<script src="calc.js?v=3.2.0" defer></script>
-<script src="app.js?v=3.2.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.3.0">
+<script src="vendor/supabase.js?v=3.3.0" defer></script>
+<script src="config.js?v=3.3.0" defer></script>
+<script src="calc.js?v=3.3.0" defer></script>
+<script src="meals.js?v=3.3.0" defer></script>
+<script src="app.js?v=3.3.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -234,26 +235,147 @@
 
   <!-- HOME (Today) -->
   <section id="view-home" class="view home" hidden aria-labelledby="home-title">
-    <div class="card">
+    <div class="card day-card">
       <p class="muted small" id="home-date"></p>
       <h2 id="home-title" class="card-title">Hi</h2>
       <p id="home-msg" class="msg" role="status" hidden></p>
-      <div class="target">
-        <span class="target-label">Today's target</span>
-        <span class="big-number" id="home-target">–</span>
-        <span class="target-unit">kcal</span>
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 220 124" aria-hidden="true" focusable="false">
+          <path class="gauge-track" d="M 20 112 A 90 90 0 0 1 200 112"></path>
+          <path class="gauge-fill" id="gauge-fill" d="M 20 112 A 90 90 0 0 1 200 112"></path>
+        </svg>
+        <div class="gauge-center">
+          <span class="gauge-number" id="home-left">–</span>
+          <span class="gauge-label" id="home-left-label">kcal left</span>
+        </div>
       </div>
-      <p class="muted" id="home-diff"></p>
+      <p class="gauge-sub" id="home-eaten-line"></p>
+      <p class="note-warn" id="home-over" hidden></p>
       <div class="stat-grid">
+        <div class="stat"><span class="stat-label" id="home-def-label">Deficit so far</span><span class="stat-value" id="home-def">–</span></div>
+        <div class="stat"><span class="stat-label">Carbs</span><span class="stat-value" id="home-carbs">–</span></div>
+        <div class="stat"><span class="stat-label">Fat</span><span class="stat-value" id="home-fat">–</span></div>
+      </div>
+      <div class="protein" id="home-protein"></div>
+    </div>
+
+    <div id="meals" class="meals" aria-live="polite"></div>
+    <p id="day-msg" class="msg" role="alert" hidden></p>
+    <button type="button" class="btn-secondary" id="day-retry" hidden>Try again</button>
+
+    <div class="card numbers-card">
+      <h2 class="card-title small-title">Your numbers</h2>
+      <div class="stat-grid">
+        <div class="stat"><span class="stat-label">Target</span><span class="stat-value" id="home-target">–</span></div>
         <div class="stat"><span class="stat-label">Maintenance</span><span class="stat-value" id="home-maint">–</span></div>
         <div class="stat"><span class="stat-label">BMI</span><span class="stat-value" id="home-bmi">–</span></div>
         <div class="stat" id="home-bf-wrap" hidden><span class="stat-label">Body fat</span><span class="stat-value" id="home-bf">–</span></div>
       </div>
-      <div class="protein" id="home-protein"></div>
+      <p class="muted small" id="home-diff"></p>
       <div id="home-notes"></div>
     </div>
-    <p class="muted center small soon">Food and workout tracking arrive in the next updates.</p>
     <button type="button" class="btn-secondary" id="to-profile">Profile &amp; settings</button>
+    <div class="add-bar"><button type="button" class="btn-primary" id="log-food">+ Log food</button></div>
+  </section>
+
+  <!-- LOG FOOD: search -->
+  <section id="view-addfood" class="card view" hidden aria-labelledby="af-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="af-back">&#8249; Today</button>
+      <h2 id="af-title" class="card-title" tabindex="-1">Log food</h2>
+    </div>
+    <fieldset class="inline-choices meal-chips" id="af-meals"><legend class="sr-only">Meal</legend>
+      <label class="pill"><input type="radio" name="af-meal" value="breakfast"><span>Breakfast</span></label>
+      <label class="pill"><input type="radio" name="af-meal" value="lunch"><span>Lunch</span></label>
+      <label class="pill"><input type="radio" name="af-meal" value="dinner"><span>Dinner</span></label>
+      <label class="pill"><input type="radio" name="af-meal" value="snacks"><span>Snacks</span></label>
+    </fieldset>
+    <label for="af-search" class="sr-only">Search foods</label>
+    <input id="af-search" class="search" type="search" placeholder="Search: chicken, naan, Big Mac…" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" maxlength="60">
+    <fieldset class="inline-choices filter-chips" id="af-filters"><legend class="sr-only">Show</legend>
+      <label class="pill small-pill"><input type="radio" name="af-filter" value="all" checked><span>All</span></label>
+      <label class="pill small-pill"><input type="radio" name="af-filter" value="whole_food"><span>Whole foods</span></label>
+      <label class="pill small-pill"><input type="radio" name="af-filter" value="fast_food"><span>Fast food</span></label>
+      <label class="pill small-pill"><input type="radio" name="af-filter" value="indian"><span>Indian</span></label>
+    </fieldset>
+    <div class="af-bar">
+      <p id="af-status" class="muted small" aria-live="polite"></p>
+      <button type="button" class="btn-link af-custom" id="af-custom">Can&rsquo;t find it? Add your own</button>
+    </div>
+    <ul id="af-results" class="results"></ul>
+  </section>
+
+  <!-- LOG FOOD: amount -->
+  <section id="view-portion" class="card view" hidden aria-labelledby="pf-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="pf-back">&#8249; Back</button>
+    </div>
+    <h2 id="pf-title" class="card-title" tabindex="-1">Food</h2>
+    <p class="chips-row" id="pf-chips"></p>
+    <p class="muted small" id="pf-source"></p>
+    <p class="note-info" id="pf-note" hidden></p>
+    <form id="pf-form" novalidate>
+      <fieldset class="choices compact" id="pf-servings"><legend class="field-legend">Amount</legend></fieldset>
+      <div class="qty-row">
+        <span class="field-legend" id="pf-qty-label">How many</span>
+        <div class="stepper">
+          <button type="button" class="step-btn" id="pf-minus" aria-label="Less">&minus;</button>
+          <input id="pf-qty" type="text" inputmode="decimal" aria-labelledby="pf-qty-label" maxlength="5" autocomplete="off">
+          <button type="button" class="step-btn" id="pf-plus" aria-label="More">+</button>
+        </div>
+      </div>
+      <div id="pf-grams-wrap">
+        <label for="pf-grams">Or type the weight</label>
+        <div class="num-row"><input id="pf-grams" type="text" inputmode="decimal" maxlength="6" autocomplete="off" placeholder="e.g. 150"><span class="unit">g</span></div>
+      </div>
+      <div class="preview" aria-live="polite">
+        <div class="preview-kcal"><span class="big-number" id="pf-kcal">–</span><span class="target-unit">kcal</span></div>
+        <div class="macro-row">
+          <span><b id="pf-p">–</b> protein</span><span><b id="pf-c">–</b> carbs</span><span><b id="pf-f">–</b> fat</span><span><b id="pf-fib">–</b> fibre</span>
+        </div>
+      </div>
+      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend>
+        <label class="pill"><input type="radio" name="pf-meal" value="breakfast"><span>Breakfast</span></label>
+        <label class="pill"><input type="radio" name="pf-meal" value="lunch"><span>Lunch</span></label>
+        <label class="pill"><input type="radio" name="pf-meal" value="dinner"><span>Dinner</span></label>
+        <label class="pill"><input type="radio" name="pf-meal" value="snacks"><span>Snacks</span></label>
+      </fieldset>
+      <p id="pf-msg" class="msg" role="alert" hidden></p>
+      <button type="submit" class="btn-primary fast-tap" id="pf-save">Add</button>
+      <button type="button" class="btn-link danger-link" id="pf-delete" hidden>Delete this entry</button>
+    </form>
+  </section>
+
+  <!-- LOG FOOD: your own food -->
+  <section id="view-custom" class="card view" hidden aria-labelledby="cf-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="cf-back">&#8249; Back</button>
+    </div>
+    <h2 id="cf-title" class="card-title" tabindex="-1">Add your own food</h2>
+    <p class="muted small">Use the numbers from the package label or the restaurant&rsquo;s website.</p>
+    <form id="cf-form" novalidate>
+      <label for="cf-name">Food name</label>
+      <input id="cf-name" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Mom's aloo paratha">
+      <label for="cf-serving">Amount (optional)</label>
+      <input id="cf-serving" type="text" maxlength="80" autocomplete="off" placeholder="e.g. 1 paratha">
+      <label for="cf-kcal">Calories</label>
+      <div class="num-row"><input id="cf-kcal" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">kcal</span></div>
+      <div class="grid-2">
+        <div><label for="cf-p">Protein</label><div class="num-row"><input id="cf-p" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">g</span></div></div>
+        <div><label for="cf-c">Carbs</label><div class="num-row"><input id="cf-c" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">g</span></div></div>
+        <div><label for="cf-f">Fat</label><div class="num-row"><input id="cf-f" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">g</span></div></div>
+        <div><label for="cf-fib">Fibre</label><div class="num-row"><input id="cf-fib" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">g</span></div></div>
+      </div>
+      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend>
+        <label class="pill"><input type="radio" name="cf-meal" value="breakfast"><span>Breakfast</span></label>
+        <label class="pill"><input type="radio" name="cf-meal" value="lunch"><span>Lunch</span></label>
+        <label class="pill"><input type="radio" name="cf-meal" value="dinner"><span>Dinner</span></label>
+        <label class="pill"><input type="radio" name="cf-meal" value="snacks"><span>Snacks</span></label>
+      </fieldset>
+      <p id="cf-msg" class="msg" role="alert" hidden></p>
+      <button type="submit" class="btn-primary fast-tap" id="cf-save">Add</button>
+      <button type="button" class="btn-link danger-link" id="cf-delete" hidden>Delete this entry</button>
+    </form>
   </section>
 
   <!-- YOUR NUMBERS (after setup) -->

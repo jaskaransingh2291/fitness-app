@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.2.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.3.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -40,8 +40,8 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom'];
   var currentView = null;
   function show(name, focusId) {
     VIEWS.forEach(function (v) { var el = $('view-' + v); if (el) el.hidden = (v !== name); });
@@ -261,7 +261,10 @@
       .catch(function () { window.location.replace(freshUrl(String(Date.now()))); });
   });
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && Date.now() - lastUpdateCheck > 60000) checkForUpdate(false);
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastUpdateCheck > 60000) checkForUpdate(false);
+    // Left open overnight? Move Today to the new day.
+    if (currentView === 'home' && meals && meals.day() && meals.day() !== C.localDate()) showToday('');
   });
   // Tidy the address bar after an update reload (only the ?v= part; never touch reset links).
   if (/^\?v=[\w.%-]+$/.test(window.location.search) && !window.location.hash) {
@@ -614,6 +617,7 @@
       userLoggedOutOnPurpose = false;
       me = null; profile = null;
       clearDrafts();
+      if (meals) meals.clear();
       showLogin('');
       $('login-email').value = '';
     });
@@ -629,6 +633,11 @@
   var stepIndex = 0;
   var answers = {};
   var targetsSavedFor = '';
+  var meals = (window.TaakatMeals && C) ? window.TaakatMeals({
+    $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
+    me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; },
+    showToday: function (note, opts) { showToday(note, opts); }, version: APP_VERSION
+  }) : null;
 
   function fmt(n) { return Number(n).toLocaleString('en-CA'); }
   function numOrNull(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
@@ -660,7 +669,7 @@
 
   function enterApp(session, note) {
     if (!session || !session.user) { showLogin(''); return; }
-    if (!C) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
+    if (!C || !meals) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
     me = { id: session.user.id, email: session.user.email || '' };
     homeShownFor = me.id;
     $('home-email').textContent = me.email;
@@ -969,6 +978,7 @@
     var n = C.numbers(p);
     if (!n.ok) return n;
     $(prefix + '-target').textContent = fmt(n.target);
+    if (prefix === 'home') $(prefix + '-target').appendChild(makeEl('small', null, 'kcal'));
     var maintEl = $(prefix + '-maint'); maintEl.textContent = fmt(n.maintenance);
     maintEl.appendChild(makeEl('small', null, 'kcal'));
     var bmiEl = $(prefix + '-bmi'); bmiEl.textContent = String(n.bmi.value);
@@ -981,12 +991,13 @@
     else if (d > 0) diffText = fmt(d) + ' kcal a day above maintenance — about ' + perWeek + ' kg a week.';
     else diffText = 'Eating this keeps your weight about the same.';
     $(prefix + '-diff').textContent = diffText;
-    var pr = $(prefix + '-protein'); pr.textContent = '';
+    var pr = prefix === 'home' ? null : $(prefix + '-protein');
+    if (pr) { pr.textContent = '';
     pr.appendChild(makeEl('span', 'protein-title', 'Protein per day'));
     [['Minimum', n.protein.min], ['Recommended', n.protein.rec], ['Perfect (while cutting)', n.protein.perfect]].forEach(function (row) {
       if (row[1] == null) return;
       var r = makeEl('div', 'protein-row'); r.appendChild(makeEl('span', null, row[0])); r.appendChild(makeEl('b', null, row[1] + ' g')); pr.appendChild(r);
-    });
+    }); }
     var notes = $(prefix + '-notes'); notes.textContent = '';
     n.notes.forEach(function (t) { notes.appendChild(makeEl('p', 'note-warn', t)); });
     return n;
@@ -1000,8 +1011,9 @@
   }
   $('numbers-done').addEventListener('click', function () { showToday(''); });
 
-  function showToday(note) {
+  function showToday(note, opts) {
     if (!profile) { loadProfile(); return; }
+    opts = opts || {};
     $('home-title').textContent = 'Hi, ' + profile.display_name;
     try {
       $('home-date').textContent = new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -1009,6 +1021,8 @@
     renderNumbers('home', profile);
     setMsg('home-msg', note || '', 'ok');
     show('home');
+    if (opts.keepEntries && meals.day() === C.localDate()) meals.redraw();
+    else meals.showDay(C.localDate());
     if (targetsSavedFor !== C.localDate()) {
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }
