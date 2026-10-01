@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.3.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.3.1';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -196,22 +196,54 @@
 
   /* ---------- Fast tap ----------
      On phones, tapping a button while the keyboard is open closes the keyboard FIRST, and the page
-     jumps before the tap lands, so the first tap "misses". Buttons marked .fast-tap act the moment the
-     finger lifts (before anything moves). The phone's late "click" that follows is then ignored. */
+     jumps before the tap lands, so the first tap "misses". Every button and every tappable pill/card
+     acts the moment the finger lifts (before anything moves). The phone's late "click" that follows
+     is then ignored. A finger that slid (scrolling a list) is NOT a tap. Mouse clicks work as normal. */
+  var TAP_SEL = 'button, label.pill, label.choice, label.swatch, label.toggle-row';
   var fastTap = null;   // { t, x, y } of the last finger-up we acted on
+  var tapDown = null;   // { el, x, y, id } where the finger went down
+  function tapTarget(node) {
+    var t = node && node.closest ? node.closest(TAP_SEL) : null;
+    return t && !t.hasAttribute('data-slow-tap') ? t : null;
+  }
+  function tapUsable(t) {
+    if (!t || t.getClientRects().length === 0) return false;   // hidden (fixed bars still count as visible)
+    if (t.tagName === 'BUTTON') return !t.disabled;
+    var input = t.control || t.querySelector('input');
+    return !!input && !input.disabled;
+  }
+  document.addEventListener('pointerdown', function (ev) {
+    if (ev.pointerType === 'mouse' || !ev.isPrimary) { tapDown = null; return; }
+    var t = tapTarget(ev.target);
+    tapDown = t ? { el: t, x: ev.clientX, y: ev.clientY, id: ev.pointerId } : null;
+  }, true);
+  document.addEventListener('pointercancel', function () { tapDown = null; }, true);   // the phone took over (scrolling)
   document.addEventListener('pointerup', function (ev) {
-    if (ev.pointerType === 'mouse') return;
-    var el = document.elementFromPoint(ev.clientX, ev.clientY);
-    var btn = el && el.closest ? el.closest('.fast-tap') : null;
-    var down = ev.target && ev.target.closest ? ev.target.closest('.fast-tap') : null;
-    if (!btn || btn !== down || btn.disabled || btn.offsetParent === null) return;   // finger must go down AND up on the same button
+    var down = tapDown; tapDown = null;
+    if (!down || ev.pointerType === 'mouse' || ev.pointerId !== down.id) return;
+    if (Math.abs(ev.clientX - down.x) > 10 || Math.abs(ev.clientY - down.y) > 10) return;   // finger slid = scroll, not a tap
+    var t = tapTarget(document.elementFromPoint(ev.clientX, ev.clientY));
+    if (t !== down.el || !tapUsable(t)) return;   // finger must go down AND up on the same thing
     fastTap = { t: Date.now(), x: ev.clientX, y: ev.clientY };
-    if (btn.type === 'submit' && btn.form) {
-      if (typeof btn.form.requestSubmit === 'function') btn.form.requestSubmit(btn);
-      else btn.form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    } else {
-      btn.click();
+    if (t.tagName === 'BUTTON') {
+      if (t.type === 'submit' && t.form) {
+        if (typeof t.form.requestSubmit === 'function') t.form.requestSubmit(t);
+        else t.form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      } else {
+        t.click();
+      }
+      return;
     }
+    // A pill / choice card / colour / switch: tick its hidden input and tell the page it changed.
+    var input = t.control || t.querySelector('input');
+    if (input.type === 'radio') {
+      if (input.checked) return;
+      input.checked = true;
+    } else if (input.type === 'checkbox') {
+      input.checked = !input.checked;
+    } else { fastTap = null; return; }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   }, true);
   document.addEventListener('click', function (ev) {
     // Ignore only the phone's own leftover click for that same finger-up: same spot, straight after.

@@ -35,6 +35,7 @@ body {
 
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
+button, label { touch-action: manipulation; }   /* no double-tap-zoom wait on taps */
 button:disabled { cursor: not-allowed; }
 [hidden] { display: none !important; }
 
