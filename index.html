@@ -19,12 +19,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;family=Sora:wght@700;800&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.4.0">
-<script src="vendor/supabase.js?v=3.4.0" defer></script>
-<script src="config.js?v=3.4.0" defer></script>
-<script src="calc.js?v=3.4.0" defer></script>
-<script src="meals.js?v=3.4.0" defer></script>
-<script src="app.js?v=3.4.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.5.0">
+<script src="vendor/supabase.js?v=3.5.0" defer></script>
+<script src="config.js?v=3.5.0" defer></script>
+<script src="calc.js?v=3.5.0" defer></script>
+<script src="meals.js?v=3.5.0" defer></script>
+<script src="workouts.js?v=3.5.0" defer></script>
+<script src="app.js?v=3.5.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -411,6 +412,123 @@
   </section>
 
   <!-- PROFILE & SETTINGS -->
+  <!-- WORKOUTS tab -->
+  <section id="view-workouts" class="view workouts" hidden aria-labelledby="wo-title">
+    <div class="card">
+      <h2 id="wo-title" class="card-title" tabindex="-1">Workouts</h2>
+      <p id="wo-msg" class="msg" role="status" hidden></p>
+      <div class="wo-active" id="wo-active" hidden>
+        <p class="wo-active-title" id="wo-active-title">Workout in progress</p>
+        <p class="muted small" id="wo-active-sub"></p>
+        <button type="button" class="btn-primary" id="wo-continue">Continue workout</button>
+      </div>
+      <button type="button" class="btn-primary wo-start" id="wo-start">Start workout</button>
+      <p id="wo-err" class="msg" role="alert" hidden></p>
+      <button type="button" class="btn-secondary" id="wo-retry" hidden>Try again</button>
+    </div>
+    <h3 class="field-legend wo-list-title">Past workouts</h3>
+    <p class="muted small" id="wo-status" hidden></p>
+    <p class="muted wo-empty" id="wo-empty" hidden>No workouts yet. Tap <b>Start workout</b> when you&rsquo;re at the gym.</p>
+    <ul class="wo-list" id="wo-list"></ul>
+  </section>
+
+  <!-- ONE WORKOUT -->
+  <section id="view-session" class="view session" hidden aria-labelledby="ws-title">
+    <div class="card ws-head">
+      <div class="sheet-head">
+        <button type="button" class="btn-link back-link" id="ws-back">&#8249; Workouts</button>
+      </div>
+      <h2 id="ws-title" class="card-title" tabindex="-1">Workout</h2>
+      <p class="muted small" id="ws-sub"></p>
+      <p id="ws-msg" class="msg" role="status" hidden></p>
+    </div>
+    <div id="ws-list" class="ws-list" aria-live="polite"></div>
+    <p id="ws-err" class="msg" role="alert" hidden></p>
+    <button type="button" class="btn-secondary" id="ws-retry" hidden>Try again</button>
+    <div id="ws-tools" hidden>
+      <button type="button" class="btn-secondary ws-add" id="ws-add">+ Add exercise</button>
+      <div class="card ws-notes-card">
+        <label for="ws-notes">Notes (optional)</label>
+        <textarea id="ws-notes" maxlength="2000" rows="3" placeholder="How did it feel? Anything to remember next time?"></textarea>
+      </div>
+      <button type="button" class="btn-primary" id="ws-finish">Finish workout</button>
+      <button type="button" class="btn-link danger-link ws-delete" id="ws-delete">Discard this workout</button>
+    </div>
+  </section>
+
+  <!-- ADD AN EXERCISE -->
+  <section id="view-expick" class="card view" hidden aria-labelledby="xp-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="xp-back">&#8249; Workout</button>
+      <h2 id="xp-title" class="card-title" tabindex="-1">Add exercise</h2>
+    </div>
+    <label for="xp-search" class="sr-only">Search exercises</label>
+    <input id="xp-search" class="search" type="search" placeholder="Search: bench, squat, curl…" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" maxlength="60">
+    <fieldset class="inline-choices filter-chips" id="xp-groups"><legend class="sr-only">Muscle group</legend>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="all" checked><span>All</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Chest"><span>Chest</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Shoulders"><span>Shoulders</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Back"><span>Back</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Biceps"><span>Biceps</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Triceps"><span>Triceps</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Legs"><span>Legs</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Abs"><span>Abs</span></label>
+      <label class="pill small-pill"><input type="radio" name="xp-group" value="Forearms"><span>Forearms</span></label>
+    </fieldset>
+    <div class="af-bar">
+      <p class="muted small" id="xp-status" aria-live="polite"></p>
+      <button type="button" class="btn-link af-custom" id="xp-custom">Can&rsquo;t find it? Add your own</button>
+    </div>
+    <p id="xp-msg" class="msg" role="status" hidden></p>
+    <ul class="results" id="xp-results"></ul>
+  </section>
+
+  <!-- YOUR OWN EXERCISE -->
+  <section id="view-exnew" class="card view" hidden aria-labelledby="xn-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="xn-back">&#8249; Back</button>
+    </div>
+    <h2 id="xn-title" class="card-title" tabindex="-1">Add your own exercise</h2>
+    <form id="xn-form" novalidate>
+      <label for="xn-name">Exercise name</label>
+      <input id="xn-name" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Hammer Strength Row">
+      <fieldset class="inline-choices xn-groups"><legend class="field-legend">Main muscle group</legend>
+        <label class="pill"><input type="radio" name="xn-group" value="Chest"><span>Chest</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Shoulders"><span>Shoulders</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Back"><span>Back</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Biceps"><span>Biceps</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Triceps"><span>Triceps</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Legs"><span>Legs</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Abs"><span>Abs</span></label>
+        <label class="pill"><input type="radio" name="xn-group" value="Forearms"><span>Forearms</span></label>
+      </fieldset>
+      <fieldset class="choices compact"><legend class="field-legend">How do you track it?</legend>
+        <label class="choice"><input type="radio" name="xn-type" value="weight_reps" checked><span class="choice-body"><b>Weight &amp; reps</b><small>e.g. 135 lb &times; 8</small></span></label>
+        <label class="choice"><input type="radio" name="xn-type" value="bodyweight_reps"><span class="choice-body"><b>Reps only</b><small>e.g. 12 push-ups</small></span></label>
+        <label class="choice"><input type="radio" name="xn-type" value="time"><span class="choice-body"><b>Time</b><small>e.g. a 1:00 plank</small></span></label>
+        <label class="choice"><input type="radio" name="xn-type" value="weight_time"><span class="choice-body"><b>Weight &amp; time</b><small>e.g. carry 50 lb for 0:45</small></span></label>
+      </fieldset>
+      <label for="xn-eq">Equipment (optional)</label>
+      <input id="xn-eq" type="text" maxlength="40" autocomplete="off" placeholder="e.g. Dumbbell, Cable, Machine">
+      <p id="xn-msg" class="msg" role="alert" hidden></p>
+      <button type="submit" class="btn-primary fast-tap" id="xn-save">Save &amp; add to workout</button>
+    </form>
+  </section>
+
+  <!-- WORKOUT DONE -->
+  <section id="view-wdone" class="card view" hidden aria-labelledby="wd-title">
+    <h2 id="wd-title" class="card-title" tabindex="-1">Nice work!</h2>
+    <p class="muted">Workout saved.</p>
+    <div class="stat-grid wd-stats">
+      <div class="stat"><span class="stat-label">Exercises</span><span class="stat-value" id="wd-ex">–</span></div>
+      <div class="stat"><span class="stat-label">Sets</span><span class="stat-value" id="wd-sets">–</span></div>
+      <div class="stat"><span class="stat-label">Lifted</span><span class="stat-value" id="wd-vol">–</span></div>
+      <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="wd-time">–</span></div>
+    </div>
+    <ul class="wd-list" id="wd-list"></ul>
+    <button type="button" class="btn-primary" id="wd-done">Done</button>
+  </section>
+
   <!-- PAST 7 DAYS -->
   <section id="view-week" class="card view" hidden aria-labelledby="wk-title">
     <div class="sheet-head">
@@ -480,6 +598,16 @@
       <p id="colour-msg" class="msg" role="status" hidden></p>
     </div>
 
+    <div class="card">
+      <h2 class="card-title">Workout weights</h2>
+      <fieldset class="inline-choices unit-chips" id="p-units"><legend class="sr-only">Weight unit for workouts</legend>
+        <label class="pill"><input type="radio" name="p-unit" value="lb"><span>lbs</span></label>
+        <label class="pill"><input type="radio" name="p-unit" value="kg"><span>kg</span></label>
+      </fieldset>
+      <p class="muted small">Sets you already logged keep their numbers — they&rsquo;re just shown in the unit you pick.</p>
+      <p id="unit-msg" class="msg" role="status" hidden></p>
+    </div>
+
     <div class="card" id="pw-card">
       <h2 class="card-title">Password</h2>
       <p id="pw-done" class="msg ok" role="status" hidden></p>
@@ -527,5 +655,16 @@
 
   <p class="foot" id="invite-note" hidden>Accounts are invite-only</p>
 </main>
+
+<nav class="tabbar" id="tabbar" aria-label="Sections" hidden>
+  <button type="button" class="tab" id="tab-food">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 2v9a2 2 0 0 1-2 2v9M3 2v6a2 2 0 0 0 4 0V2M17 22V2c-2.2 0-4 2.7-4 6v5h4"/></svg>
+    <span>Food</span>
+  </button>
+  <button type="button" class="tab" id="tab-workouts">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/></svg>
+    <span>Workouts</span>
+  </button>
+</nav>
 </body>
 </html>

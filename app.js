@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.4.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.5.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -40,8 +40,9 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone'];
+  var TAB_VIEWS = ['home', 'workouts'];
   var currentView = null;
   function show(name, focusId) {
     VIEWS.forEach(function (v) { var el = $('view-' + v); if (el) el.hidden = (v !== name); });
@@ -49,6 +50,13 @@
     var inApp = APP_VIEWS.indexOf(name) !== -1;
     document.body.classList.toggle('app-mode', inApp);
     $('topbar').hidden = !inApp;
+    var tabs = TAB_VIEWS.indexOf(name) !== -1;
+    $('tabbar').hidden = !tabs;
+    document.body.classList.toggle('tabs-on', tabs);
+    if (tabs) {
+      $('tab-food').setAttribute('aria-current', name === 'home' ? 'page' : 'false');
+      $('tab-workouts').setAttribute('aria-current', name === 'workouts' ? 'page' : 'false');
+    }
     if (inApp) { try { window.scrollTo(0, 0); } catch (e) { /* ignore */ } }
     currentView = name;
     if (focusId) {
@@ -121,6 +129,7 @@
     if (code === 'user_banned') return 'This account is turned off.';
     if (code === '23514') return 'One of those values is outside the allowed range. Please check them.';
     if (code === '42501') return "You don't have permission to do that.";
+    if (code === 'PGRST204' || code === '42703' || code === 'PGRST200') return 'Taakat’s database needs its latest update before this works. (Jas: run the newest database update in Supabase.)';
     if (code === 'reauthentication_needed' || /reauthenticat/i.test(text)) return 'For safety, please log out, log back in, and try again.';
     if (code === 'same_password' || /should be different/i.test(text)) return 'Your new password must be different from your old one.';
     if (code === 'weak_password' || /weak|password should/i.test(text)) return 'That password is too weak. Try a longer one with a mix of letters and numbers.';
@@ -663,6 +672,8 @@
       me = null; profile = null; homeDay = null;
       clearDrafts();
       if (meals) meals.clear();
+      if (workouts) workouts.clear();
+      resumeCheckPending = false;
       showLogin('');
       $('login-email').value = '';
     });
@@ -687,6 +698,14 @@
     viewedDay: function () { return viewedDay(); }
   }) : null;
 
+  var workouts = (window.TaakatWorkouts && C) ? window.TaakatWorkouts({
+    $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
+    me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; }, version: APP_VERSION
+  }) : null;
+  var resumeCheckPending = false;
+  $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
+  $('tab-workouts').addEventListener('click', function () { if (currentView !== 'workouts' && workouts) workouts.open(''); });
+
   function fmt(n) { return Number(n).toLocaleString('en-CA'); }
   function numOrNull(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
   function radioValue(name) { var r = document.querySelector('input[name="' + name + '"]:checked'); return r ? r.value : ''; }
@@ -700,6 +719,7 @@
     var out = Object.assign({}, p);
     ['age', 'height_cm', 'weight_kg', 'neck_cm', 'waist_cm', 'hip_cm'].forEach(function (k) { out[k] = numOrNull(p[k]); });
     out.surprise_colors = p.surprise_colors !== false;
+    out.weight_unit = p.weight_unit === 'kg' ? 'kg' : 'lb';
     return out;
   }
 
@@ -717,9 +737,10 @@
 
   function enterApp(session, note) {
     if (!session || !session.user) { showLogin(''); return; }
-    if (!C || !meals) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
+    if (!C || !meals || !workouts) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
     me = { id: session.user.id, email: session.user.email || '' };
     homeDay = null;
+    resumeCheckPending = true;
     homeShownFor = me.id;
     $('home-email').textContent = me.email;
     pendingHomeNote = note || '';
@@ -1083,6 +1104,7 @@
     show('home');
     if (opts.keepEntries && meals.day() === d) meals.redraw();
     else meals.showDay(d);
+    if (resumeCheckPending) { resumeCheckPending = false; workouts.resumeIfActive(); }
     if (targetsSavedFor !== C.localDate()) {
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }
@@ -1121,7 +1143,8 @@
     updateProfileHip();
     renderSwatches('p-swatches', 'p-colour', p.surprise_colors === false ? p.accent_color : p.accent_color);
     $('p-surprise').checked = p.surprise_colors !== false;
-    ['profile-msg', 'colour-msg'].forEach(function (id) { setMsg(id, ''); });
+    setRadio('p-unit', p.weight_unit === 'kg' ? 'kg' : 'lb');
+    ['profile-msg', 'colour-msg', 'unit-msg'].forEach(function (id) { setMsg(id, ''); });
     resetPwCard('');
     show('profile');
     focusQuiet($('profile-title'));
@@ -1157,7 +1180,7 @@
     var row = rowFromAnswers(a);
     sb.from('profiles').upsert(row, { onConflict: 'id' }).then(function (res) {
       if (res.error) throw res.error;
-      profile = normalise(row);
+      profile = normalise(Object.assign({}, profile, row));   // keep settings saved elsewhere (lbs/kg, colour)
       return saveTodayTargets(profile).then(function () {
         setMsg('profile-msg', 'Saved. Your targets are updated.', 'ok');
       }, function () {
@@ -1216,6 +1239,30 @@
     }
     if (!on) { var c = accentByKey(fav); if (c) setAccent(c); }
     saveColour(fav, on);
+  });
+
+  /* Workout weights: lbs or kg — saves straight away */
+  var unitBusy = false;
+  $('p-units').addEventListener('change', function () {
+    var u = radioValue('p-unit') === 'kg' ? 'kg' : 'lb';
+    if (unitBusy || u === profile.weight_unit) return;
+    var before = profile.weight_unit;
+    unitBusy = true;
+    Array.prototype.forEach.call(document.querySelectorAll('#p-units input'), function (el) { el.disabled = true; });
+    setMsg('unit-msg', '');
+    sb.from('profiles').update({ weight_unit: u }).eq('id', me.id).then(function (res) {
+      if (res.error) throw res.error;
+      profile.weight_unit = u;
+      setMsg('unit-msg', 'Saved. Workouts now show ' + (u === 'kg' ? 'kg' : 'lbs') + '.', 'ok');
+      workouts.unitsChanged();
+    }).catch(function (e) {
+      console.warn('Unit save failed:', e && (e.code || e.message));
+      setRadio('p-unit', before);
+      setMsg('unit-msg', friendly(e));
+    }).finally(function () {
+      unitBusy = false;
+      Array.prototype.forEach.call(document.querySelectorAll('#p-units input'), function (el) { el.disabled = false; });
+    });
   });
 
   /* Change password: 1) confirm the current password, 2) choose a new one. Forgot → reset email. */
