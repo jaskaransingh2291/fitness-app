@@ -307,3 +307,10 @@ option { background: #111317; color: var(--text); }
 .section-sub { margin: 8px 0 0; font-size: 14px; font-weight: 700; color: var(--muted-2); }
 .danger-link { color: var(--bad); }
 @media (max-width: 360px) { .grid-3 { grid-template-columns: 1fr 1fr; } .swatches { grid-template-columns: repeat(2, 1fr); } }
+
+/* "New version ready" banner */
+.banner.update { background: #10222a; color: #CFF6FF; border-bottom: 1px solid rgba(63, 221, 245, .35); justify-content: space-between; text-align: left; }
+.banner-btn { flex-shrink: 0; min-height: 44px; padding: 0 16px; border-radius: 22px; border: none; background: var(--a); color: #08090B; font-weight: 800; font-size: 15px; }
+body.has-banner .screen { padding-top: calc(env(safe-area-inset-top, 0px) + 84px); }
+body.has-banner.app-mode .screen { padding-top: calc(env(safe-area-inset-top, 0px) + 76px); }
+.banner + .banner { top: 64px; }

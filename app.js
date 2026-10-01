@@ -3,6 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
+  var APP_VERSION = '3.2.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -220,6 +221,52 @@
     if (same) { ev.preventDefault(); ev.stopImmediatePropagation(); }
     fastTap = null;   // one-shot
   }, true);
+
+
+  /* ---------- Automatic updates ----------
+     Phones (especially Home Screen apps) can keep running an old saved copy. On start we ask the
+     server which version is live; if it's newer we reload once with a fresh address. When you come
+     back to the app later, we show a "New version ready" banner instead of reloading under you. */
+  function versionNewer(a, b) {   // is a newer than b?
+    var pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+    for (var i = 0; i < 3; i++) { if ((pa[i] || 0) > (pb[i] || 0)) return true; if ((pa[i] || 0) < (pb[i] || 0)) return false; }
+    return false;
+  }
+  function freshUrl(v) { return window.location.pathname + '?v=' + encodeURIComponent(v); }
+  function fetchLiveVersion() {
+    return window.fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('version ' + r.status); return r.json(); })
+      .then(function (j) { return j && typeof j.version === 'string' ? j.version : null; });
+  }
+  var lastUpdateCheck = 0;
+  function checkForUpdate(onStart) {
+    if (!navigator.onLine) return;
+    lastUpdateCheck = Date.now();
+    fetchLiveVersion().then(function (live) {
+      if (!live || !versionNewer(live, APP_VERSION)) return;
+      var tried = null;
+      try { tried = window.sessionStorage.getItem('taakat.updateTried'); } catch (e) { /* ignore */ }
+      var busyWithLink = hadAuthStuffInUrl || pendingTokenHash || recoveryMode;
+      if (onStart && !busyWithLink && tried !== live) {
+        try { window.sessionStorage.setItem('taakat.updateTried', live); } catch (e) { /* ignore */ }
+        window.location.replace(freshUrl(live));     // a new address can't come from the old saved copy
+        return;
+      }
+      $('update-banner').hidden = false;
+      syncBanners();
+    }).catch(function () { /* offline or blocked: try again later */ });
+  }
+  $('update-btn').addEventListener('click', function () {
+    fetchLiveVersion().then(function (live) { window.location.replace(freshUrl(live || String(Date.now()))); })
+      .catch(function () { window.location.replace(freshUrl(String(Date.now()))); });
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && Date.now() - lastUpdateCheck > 60000) checkForUpdate(false);
+  });
+  // Tidy the address bar after an update reload (only the ?v= part; never touch reset links).
+  if (/^\?v=[\w.%-]+$/.test(window.location.search) && !window.location.hash) {
+    try { window.history.replaceState(null, '', window.location.pathname); } catch (e) { /* ignore */ }
+  }
 
   /* ---------- start ---------- */
   pickAccent();
@@ -1202,10 +1249,14 @@
   });
 
   /* ---------- offline banner ---------- */
-  function updateOnline() { $('offline').hidden = navigator.onLine; }
+  function syncBanners() {
+    document.body.classList.toggle('has-banner', !$('offline').hidden || !$('update-banner').hidden);
+  }
+  function updateOnline() { $('offline').hidden = navigator.onLine; syncBanners(); }
   window.addEventListener('online', updateOnline);
   window.addEventListener('offline', updateOnline);
   updateOnline();
 
+  checkForUpdate(true);
   boot();
 })();
