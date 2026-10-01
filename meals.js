@@ -200,6 +200,8 @@
       var len = 282.7;   // half-circle with r = 90
       fill.style.strokeDasharray = (len * frac).toFixed(1) + ' ' + len;
       fill.classList.toggle('over', over);
+      var bar = $('home-bar');
+      if (bar) { bar.style.width = (frac * 100).toFixed(1) + '%'; bar.classList.toggle('over', over); }
       $('home-left').textContent = loading ? '…' : fmt(Math.abs(left));
       $('home-left-label').textContent = over ? 'kcal over target' : (isPast ? 'kcal under target' : 'kcal left');
       $('home-eaten-line').textContent = loading ? (isPast ? 'Loading that day’s food…' : 'Loading today’s food…') : 'Eaten ' + fmt(t.kcal) + ' of ' + fmt(target) + ' kcal';

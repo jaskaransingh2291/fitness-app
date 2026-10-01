@@ -3,10 +3,11 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.5.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.6.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
+    { key: 'orange', name: 'Signal Orange', hex: '#FF6A1F', rgb: '255, 106, 31' },
     { key: 'lime',   name: 'Volt Lime',     hex: '#C8F54A', rgb: '200, 245, 74' },
     { key: 'blue',   name: 'Electric Blue', hex: '#6B97FF', rgb: '107, 151, 255' },
     { key: 'violet', name: 'Ultra Violet',  hex: '#B39BFF', rgb: '179, 155, 255' },
@@ -35,8 +36,9 @@
     var choices = ACCENTS.filter(function (c) { return c.hex !== last; });
     var c = choices[Math.floor(Math.random() * choices.length)] || ACCENTS[3];
     store('taakat.lastAccent', c.hex);
-    setAccent(c);
-    launchAccent = c;
+    launchAccent = c;          // used after login by people who chose "Surprise me"
+    setAccent(ACCENTS[0]);     // logged-out screens use the Taakat orange
+
   }
   var launchAccent = null;
 
@@ -52,6 +54,7 @@
     $('topbar').hidden = !inApp;
     var tabs = TAB_VIEWS.indexOf(name) !== -1;
     $('tabbar').hidden = !tabs;
+    $('to-profile').hidden = !tabs;
     document.body.classList.toggle('tabs-on', tabs);
     if (tabs) {
       $('tab-food').setAttribute('aria-current', name === 'home' ? 'page' : 'false');
@@ -809,7 +812,7 @@
   }
 
   function startSetup() {
-    answers = { surprise: true, colour: null };
+    answers = { surprise: false, colour: 'orange' };
     stepIndex = 0;
     if (profile) {   // a half-finished profile: keep what's there
       answers.name = profile.display_name || '';
@@ -1092,6 +1095,7 @@
     if (opts.day !== undefined) homeDay = opts.day;
     var today = C.localDate(), d = viewedDay();
     $('home-title').textContent = 'Hi, ' + profile.display_name;
+    $('to-profile').textContent = (String(profile.display_name || '?').trim().charAt(0) || '?').toUpperCase();
     $('day-name').textContent = C.dayName(d, today);
     $('home-date').textContent = C.longDate(d);
     $('day-next').disabled = d >= today;

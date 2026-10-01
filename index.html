@@ -7,7 +7,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Taakat</title>
 <meta name="description" content="Workout and meal tracker for our crew.">
-<meta name="theme-color" content="#08090B">
+<meta name="theme-color" content="#121211">
 <meta name="color-scheme" content="dark">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -18,14 +18,14 @@
 <meta name="apple-mobile-web-app-title" content="Taakat">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;family=Sora:wght@700;800&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.5.0">
-<script src="vendor/supabase.js?v=3.5.0" defer></script>
-<script src="config.js?v=3.5.0" defer></script>
-<script src="calc.js?v=3.5.0" defer></script>
-<script src="meals.js?v=3.5.0" defer></script>
-<script src="workouts.js?v=3.5.0" defer></script>
-<script src="app.js?v=3.5.0" defer></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
+<link rel="stylesheet" href="styles.css?v=3.6.0">
+<script src="vendor/supabase.js?v=3.6.0" defer></script>
+<script src="config.js?v=3.6.0" defer></script>
+<script src="calc.js?v=3.6.0" defer></script>
+<script src="meals.js?v=3.6.0" defer></script>
+<script src="workouts.js?v=3.6.0" defer></script>
+<script src="app.js?v=3.6.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -138,6 +138,7 @@
       </svg>
     </svg>
     <h1 class="topbar-title" id="topbar-title">Taakat</h1>
+    <button type="button" class="topbar-me" id="to-profile" aria-label="Profile and settings">J</button>
   </header>
 
   <!-- PROFILE COULDN'T LOAD (never show setup just because the internet failed) -->
@@ -256,6 +257,7 @@
           <span class="gauge-label" id="home-left-label">kcal left</span>
         </div>
       </div>
+      <div class="kbar" aria-hidden="true"><div class="kbar-fill" id="home-bar"></div></div>
       <p class="gauge-sub" id="home-eaten-line"></p>
       <p class="note-warn" id="home-over" hidden></p>
       <div class="stat-grid">
@@ -283,7 +285,6 @@
       <p class="muted small" id="home-diff"></p>
       <div id="home-notes"></div>
     </div>
-    <button type="button" class="btn-secondary" id="to-profile">Profile &amp; settings</button>
     <div class="add-bar"><button type="button" class="btn-primary" id="log-food">+ Log food</button></div>
   </section>
 
@@ -415,7 +416,7 @@
   <!-- WORKOUTS tab -->
   <section id="view-workouts" class="view workouts" hidden aria-labelledby="wo-title">
     <div class="card">
-      <h2 id="wo-title" class="card-title" tabindex="-1">Workouts</h2>
+      <h2 id="wo-title" class="card-title" tabindex="-1">Training</h2>
       <p id="wo-msg" class="msg" role="status" hidden></p>
       <div class="wo-active" id="wo-active" hidden>
         <p class="wo-active-title" id="wo-active-title">Workout in progress</p>
@@ -436,7 +437,7 @@
   <section id="view-session" class="view session" hidden aria-labelledby="ws-title">
     <div class="card ws-head">
       <div class="sheet-head">
-        <button type="button" class="btn-link back-link" id="ws-back">&#8249; Workouts</button>
+        <button type="button" class="btn-link back-link" id="ws-back">&#8249; Training</button>
       </div>
       <h2 id="ws-title" class="card-title" tabindex="-1">Workout</h2>
       <p class="muted small" id="ws-sub"></p>
@@ -663,7 +664,7 @@
   </button>
   <button type="button" class="tab" id="tab-workouts">
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8"/></svg>
-    <span>Workouts</span>
+    <span>Training</span>
   </button>
 </nav>
 </body>

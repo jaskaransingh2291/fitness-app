@@ -396,7 +396,7 @@
       $('ws-notes').value = s.notes || '';
       $('ws-delete').textContent = finished ? 'Delete this workout' : 'Discard this workout';
       $('ws-delete').dataset.armed = '';
-      $('ws-back').textContent = '‹ Workouts';
+      $('ws-back').textContent = '‹ Training';
       var list = $('ws-list'); list.textContent = '';
       if (!exs.length) list.appendChild(el('p', 'muted ws-none', finished ? 'No exercises in this workout.' : 'Add your first exercise to get going.'));
       exs.forEach(function (e, i) { list.appendChild(exCard(e, i, u)); });
