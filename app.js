@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.8.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.9.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -42,8 +42,8 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo'];
   var TAB_VIEWS = ['home', 'workouts'];
   var currentView = null;
   function show(name, focusId) {
@@ -677,6 +677,7 @@
       if (meals) meals.clear();
       if (workouts) workouts.clear();
       if (splits) splits.clear();
+      if (exinfo) exinfo.clear();
       resumeCheckPending = false;
       showLogin('');
       $('login-email').value = '';
@@ -705,11 +706,15 @@
   var workouts = (window.TaakatWorkouts && C) ? window.TaakatWorkouts({
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; }, version: APP_VERSION,
-    splits: function () { return splits; }
+    splits: function () { return splits; }, exinfo: function () { return exinfo; }
   }) : null;
   var splits = (window.TaakatSplits && workouts) ? window.TaakatSplits({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, current: function () { return currentView; }, version: APP_VERSION, workouts: workouts
+  }) : null;
+  var exinfo = (window.TaakatExInfo && workouts) ? window.TaakatExInfo({
+    $: $, show: show, focusQuiet: function (el) { focusQuiet(el); }, current: function () { return currentView; },
+    fallback: function () { workouts.open(''); }
   }) : null;
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });

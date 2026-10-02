@@ -19,14 +19,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.8.0">
-<script src="vendor/supabase.js?v=3.8.0" defer></script>
-<script src="config.js?v=3.8.0" defer></script>
-<script src="calc.js?v=3.8.0" defer></script>
-<script src="meals.js?v=3.8.0" defer></script>
-<script src="workouts.js?v=3.8.0" defer></script>
-<script src="splits.js?v=3.8.0" defer></script>
-<script src="app.js?v=3.8.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.9.0">
+<script src="vendor/supabase.js?v=3.9.0" defer></script>
+<script src="config.js?v=3.9.0" defer></script>
+<script src="calc.js?v=3.9.0" defer></script>
+<script src="meals.js?v=3.9.0" defer></script>
+<script src="workouts.js?v=3.9.0" defer></script>
+<script src="splits.js?v=3.9.0" defer></script>
+<script src="exinfo.js?v=3.9.0" defer></script>
+<script src="app.js?v=3.9.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -428,6 +429,7 @@
       <button type="button" class="btn-primary wo-start" id="wo-start">Start workout</button>
       <p id="wo-err" class="msg" role="alert" hidden></p>
       <button type="button" class="btn-secondary" id="wo-retry" hidden>Try again</button>
+      <button type="button" class="wo-exlib" id="wo-exlib"><span class="wo-exlib-t"><b>Exercises</b><small>How to do each one and the muscles it works</small></span><span class="wo-exlib-go" aria-hidden="true">&#8250;</span></button>
     </div>
     <h3 class="field-legend wo-list-title">History</h3>
     <p class="muted small" id="wo-status" hidden></p>
@@ -517,6 +519,27 @@
       <p id="xn-msg" class="msg" role="alert" hidden></p>
       <button type="submit" class="btn-primary fast-tap" id="xn-save">Save &amp; add to workout</button>
     </form>
+  </section>
+
+  <!-- ONE EXERCISE: what it works, how to do it safely -->
+  <section id="view-exinfo" class="card view" hidden aria-labelledby="ei-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="ei-back">&#8249; Back</button>
+    </div>
+    <h2 id="ei-title" class="card-title ei-title" tabindex="-1">Exercise</h2>
+    <p class="muted small ei-meta" id="ei-meta"></p>
+    <a class="btn-secondary ei-video" id="ei-video" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer" data-slow-tap>Watch how to do it</a>
+    <p class="muted small ei-video-note">Opens a YouTube search in a new tab. The videos are made by other people, so pick one from a coach you trust.</p>
+    <p class="note-info ei-own" id="ei-own" hidden></p>
+    <section class="ei-sec" id="ei-muscles" aria-labelledby="ei-muscles-h">
+      <h3 class="ei-h" id="ei-muscles-h">Muscles worked</h3>
+      <div class="ei-row" id="ei-main-row"><p class="ei-k">Main</p><p class="ei-v" id="ei-main"></p></div>
+      <div class="ei-row" id="ei-helpers-row"><p class="ei-k">Also works</p><ul class="ei-v ei-list" id="ei-helpers"></ul></div>
+    </section>
+    <section class="ei-sec" id="ei-safe" aria-labelledby="ei-safe-h">
+      <h3 class="ei-h" id="ei-safe-h">Do it safely</h3>
+      <ul class="ei-tips" id="ei-tips"></ul>
+    </section>
   </section>
 
   <!-- WORKOUT DONE -->

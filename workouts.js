@@ -499,7 +499,11 @@
       var card = el('div', 'card ws-ex'); card.setAttribute('data-ex', String(e.id));
       var head = el('div', 'ws-ex-head');
       var ht = el('div', 'ws-ex-titles');
-      ht.appendChild(el('h3', 'ws-ex-name', e.name));
+      var hn = el('h3', 'ws-ex-name');
+      var nb = el('button', 'ws-ex-link', e.name); nb.type = 'button';
+      nb.setAttribute('aria-label', e.name + ' — how to do it');
+      nb.addEventListener('click', function () { showInfo(infoFor(e), '\u2039 Workout', function () { api.show('session'); }); });
+      hn.appendChild(nb); ht.appendChild(hn);
       var meta = [e.group, e.eq].filter(Boolean);
       if (e.one) meta.push('one side at a time');
       ht.appendChild(el('span', 'ws-ex-meta', meta.join(' · ')));
@@ -809,16 +813,16 @@
     function openPicker(mode) {
       pickMode = mode || { type: 'session' };
       if (pickMode.type === 'session' && exs.length >= MAX_EXERCISES) { api.setMsg('ws-err', 'That’s the most exercises one workout can hold (' + MAX_EXERCISES + ').'); return; }
-      if (pickMode.type !== 'ext') pickerFor = session.id;
+      if (pickMode.type === 'session' || pickMode.type === 'swap') pickerFor = session.id;
       $('xp-search').value = '';
       var g0 = pickMode.type === 'swap' && GROUPS.indexOf(pickMode.e.group) !== -1 ? pickMode.e.group : 'all';
       setRadio('xp-group', g0);
-      $('xp-title').textContent = pickMode.type === 'swap' ? 'Swap ' + pickMode.e.name : (pickMode.title || 'Add exercise');
-      $('xp-back').textContent = pickMode.type === 'ext' ? '\u2039 Split' : '\u2039 Workout';
+      $('xp-title').textContent = pickMode.type === 'swap' ? 'Swap ' + pickMode.e.name : (pickMode.type === 'browse' ? 'Exercises' : (pickMode.title || 'Add exercise'));
+      $('xp-back').textContent = pickMode.type === 'ext' ? '\u2039 Split' : (pickMode.type === 'browse' ? '\u2039 Training' : '\u2039 Workout');
       var planOk = pickMode.type === 'swap' && session && session.split_id && session.split_day_no && api.splits();
       $('xp-plan-wrap').hidden = !planOk;
       $('xp-plan').checked = false;
-      $('xn-save').textContent = pickMode.type === 'ext' ? 'Save & add to split' : (pickMode.type === 'swap' ? 'Save & swap it in' : 'Save & add to workout');
+      $('xn-save').textContent = pickMode.type === 'ext' ? 'Save & add to split' : (pickMode.type === 'swap' ? 'Save & swap it in' : (pickMode.type === 'browse' ? 'Save & open it' : 'Save & add to workout'));
       api.setMsg('xp-msg', '');
       $('xp-results').textContent = '';
       $('xp-status').textContent = 'Loading exercises…';
@@ -881,13 +885,26 @@
     $('xp-groups').addEventListener('change', runPick);
     $('xp-back').addEventListener('click', function () {
       if (pickMode.type === 'ext') { var m = pickMode; pickMode = { type: 'session' }; if (m.onBack) m.onBack(); return; }
+      if (pickMode.type === 'browse') { pickMode = { type: 'session' }; open(''); return; }
       backToSession();
     });
     function handlePick(x) {
+      if (pickMode.type === 'browse') { showInfo(x, '\u2039 Exercises', function () { pickMode = { type: 'browse' }; api.show('expick'); }); return; }
       if (pickMode.type === 'ext') { var m = pickMode; pickMode = { type: 'session' }; m.onPick(x); return; }
       if (pickMode.type === 'swap') { swapExercise(pickMode.e, x, $('xp-plan').checked && !$('xp-plan-wrap').hidden); return; }
       addExercise(x);
     }
+    /* An exercise's own page (muscles, safety tips, "watch how", later your progress). */
+    function showInfo(x, backLabel, onBack) {
+      var info = api.exinfo && api.exinfo();
+      if (!info || !x) return;
+      info.open(x, { backLabel: backLabel, onBack: onBack });
+    }
+    function infoFor(e) {
+      return findEx(e.ref) || { id: e.ref, n: e.name, g: e.group || '', eq: e.eq || '', tt: e.tt, custom: /^C\d+$/.test(String(e.ref || '')) };
+    }
+    $('wo-exlib').addEventListener('click', function () { openPicker({ type: 'browse' }); });
+
     /* Someone else (the split editor) needs an exercise chosen. */
     function pickExercise(opts) { openPicker({ type: 'ext', title: opts.title, onPick: opts.onPick, onBack: opts.onBack }); }
 

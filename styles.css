@@ -621,3 +621,30 @@ input.se-day-name { height: 48px; font-family: var(--font-head); font-size: 20px
   .tab svg { width: 20px; height: 20px; }
   .sheet-head .card-title { font-size: 28px; }
 }
+
+/* ===================== Stage 5c: exercise pages ===================== */
+.ws-ex-link { display: block; width: 100%; min-height: 44px; padding: 8px 0 6px; border: none; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left;
+  text-decoration: underline; text-decoration-color: var(--rule-2); text-decoration-thickness: 2px; text-underline-offset: 5px; overflow-wrap: anywhere; }
+.ws-ex-link:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.wo-exlib { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 64px; margin-top: 14px; padding: 8px 0; border: none; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: transparent; color: var(--text); text-align: left; }
+.wo-exlib-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wo-exlib-t b { font-family: var(--font-head); font-size: 20px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.wo-exlib-t small { font-size: 14px; color: var(--muted); }
+.wo-exlib-go { flex-shrink: 0; font-family: var(--font-head); font-size: 30px; font-weight: 700; color: var(--a); line-height: 1; }
+.wo-exlib:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.ei-title { margin-top: 6px; font-size: clamp(32px, 10vw, 44px); line-height: .95; overflow-wrap: anywhere; }
+.ei-meta { margin: 0; }
+.ei-video { margin-top: 16px; text-decoration: none; }
+.ei-video::after { content: "\2197"; font-size: 20px; }
+.ei-video-note { margin: 6px 0 0; }
+.ei-own { margin-top: 14px; }
+.ei-sec { margin-top: 26px; }
+.ei-sec[hidden], .ei-row[hidden] { display: none; }
+.ei-h { margin: 0; padding-bottom: 6px; border-bottom: 2px solid var(--text); font-family: var(--font-head); font-size: 20px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.ei-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.ei-k { margin: 0; font-family: var(--font-head); font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ei-v { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.ei-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; font-weight: 500; }
+.ei-tips { list-style: none; margin: 0; padding: 0; counter-reset: tip; }
+.ei-tips li { position: relative; padding: 12px 0 12px 40px; border-bottom: 1px solid var(--rule); counter-increment: tip; }
+.ei-tips li::before { content: counter(tip, decimal-leading-zero); position: absolute; left: 0; top: 10px; font-family: var(--font-head); font-size: 22px; font-weight: 800; color: var(--a); }
