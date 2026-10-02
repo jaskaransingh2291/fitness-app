@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.11.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.12.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -42,8 +42,8 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
   var TAB_VIEWS = ['home', 'workouts'];
   var currentView = null;
   function show(name, focusId) {
@@ -658,7 +658,7 @@
   }
   $('logout-btn').addEventListener('click', function () { doLogout($('logout-btn')); });
   $('perr-logout').addEventListener('click', function () { doLogout($('perr-logout')); });
-  function doLogout(btn) {
+  function doLogout(btn, note, kind) {
     if (logoutBusy) return;
     logoutBusy = true;
     userLoggedOutOnPurpose = true;
@@ -680,8 +680,9 @@
       if (exinfo) exinfo.clear();
       if (body) body.clear();
       if (data) data.clear();
+      if (cover) cover.clear();
       resumeCheckPending = false;
-      showLogin('');
+      showLogin(note || '', kind);
       $('login-email').value = '';
     });
   }
@@ -708,7 +709,7 @@
   var workouts = (window.TaakatWorkouts && C) ? window.TaakatWorkouts({
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; }, version: APP_VERSION,
-    splits: function () { return splits; }, exinfo: function () { return exinfo; }
+    splits: function () { return splits; }, exinfo: function () { return exinfo; }, cover: function () { return cover; }
   }) : null;
   var splits = (window.TaakatSplits && workouts) ? window.TaakatSplits({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
@@ -740,6 +741,47 @@
     me: function () { return me; }, profile: function () { return profile; }, version: APP_VERSION,
     openProfileData: function () { openProfile(); var c = $('dl-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); focusQuiet($('dl-prepare')); }
   }) : null;
+  var cover = (window.TaakatCover && C) ? window.TaakatCover({
+    $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly,
+    me: function () { return me; }, profile: function () { return profile; }
+  }) : null;
+
+  /* Delete account: removes the cover photo (Supabase only allows that through its photo service), then
+     delete_my_account() removes the login and — through the database's cascade — everything saved. */
+  var deleteBusy = false;
+  $('da-open').addEventListener('click', function () {
+    $('da-confirm').value = ''; $('da-go').disabled = true; setMsg('da-msg', '');
+    show('delacct'); focusQuiet($('da-title'));
+  });
+  $('da-back').addEventListener('click', function () { if (!deleteBusy) openProfile(); });
+  $('da-backup').addEventListener('click', function () { if (!deleteBusy && data) { openProfile(); var c = $('dl-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); focusQuiet($('dl-prepare')); } });
+  function deleteTyped() { return $('da-confirm').value.trim().toUpperCase() === 'DELETE'; }
+  $('da-confirm').addEventListener('input', function () { $('da-go').disabled = !deleteTyped(); setMsg('da-msg', ''); });
+  $('da-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (deleteBusy || !me) return;
+    if (!deleteTyped()) { setMsg('da-msg', 'Type DELETE in the box first.'); return; }
+    if (!navigator.onLine) { setMsg('da-msg', "You're offline. Nothing was deleted — connect and try again."); return; }
+    deleteBusy = true;
+    var btn = $('da-go');
+    setBusy(btn, true, 'Deleting…');
+    var step = 'photo';
+    var hadPhoto = !!(cover && profile && profile.cover_updated_at);
+    var first = hadPhoto ? cover.removePhoto() : Promise.resolve();
+    first.then(function () {
+      step = 'account';
+      return sb.rpc('delete_my_account');
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      deleteBusy = false; setBusy(btn, false);
+      try { Object.keys(window.localStorage).forEach(function (k) { if (/^taakat-backup-snooze-/.test(k)) window.localStorage.removeItem(k); }); } catch (e) { /* ignore */ }
+      doLogout(btn, 'Your account and everything in it were deleted.', 'ok');
+    }).catch(function (e) {
+      console.warn('Delete account failed at ' + step + ':', e && (e.code || e.statusCode || e.message));
+      deleteBusy = false; setBusy(btn, false);
+      setMsg('da-msg', step === 'photo' ? friendly(e) + ' Nothing was deleted — try again.' : friendly(e) + ' Your account was NOT deleted' + (hadPhoto ? ' (only your cover photo was removed)' : '') + ' — try again.');
+    });
+  });
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
   $('tab-workouts').addEventListener('click', function () { if (currentView !== 'workouts' && workouts) workouts.open(''); });
@@ -1188,6 +1230,7 @@
     ['profile-msg', 'colour-msg', 'unit-msg'].forEach(function (id) { setMsg(id, ''); });
     resetPwCard('');
     if (data) data.reset();
+    if (cover) cover.card();
     show('profile');
     focusQuiet($('profile-title'));
   }

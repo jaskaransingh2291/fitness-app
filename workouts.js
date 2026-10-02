@@ -195,6 +195,7 @@
       api.show('workouts');
       api.setMsg('wo-msg', note || '', 'ok');
       $('wo-active').hidden = true; $('wo-start').hidden = false;
+      if (api.cover && api.cover()) api.cover().paintHero();
       var spBox = $('wo-split'); spBox.textContent = ''; var ld = el('p', 'muted small', 'Loading your split…'); spBox.appendChild(ld);
       $('wo-list').textContent = '';
       $('wo-empty').hidden = true;

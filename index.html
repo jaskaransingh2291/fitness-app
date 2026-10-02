@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://guhrftmudycxlzzygtir.supabase.co wss://guhrftmudycxlzzygtir.supabase.co; manifest-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://guhrftmudycxlzzygtir.supabase.co wss://guhrftmudycxlzzygtir.supabase.co; manifest-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Taakat</title>
 <meta name="description" content="Workout and meal tracker for our crew.">
@@ -19,18 +19,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.11.0">
-<script src="vendor/supabase.js?v=3.11.0" defer></script>
-<script src="config.js?v=3.11.0" defer></script>
-<script src="calc.js?v=3.11.0" defer></script>
-<script src="meals.js?v=3.11.0" defer></script>
-<script src="workouts.js?v=3.11.0" defer></script>
-<script src="splits.js?v=3.11.0" defer></script>
-<script src="chart.js?v=3.11.0" defer></script>
-<script src="exinfo.js?v=3.11.0" defer></script>
-<script src="body.js?v=3.11.0" defer></script>
-<script src="data.js?v=3.11.0" defer></script>
-<script src="app.js?v=3.11.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.12.0">
+<script src="vendor/supabase.js?v=3.12.0" defer></script>
+<script src="config.js?v=3.12.0" defer></script>
+<script src="calc.js?v=3.12.0" defer></script>
+<script src="meals.js?v=3.12.0" defer></script>
+<script src="workouts.js?v=3.12.0" defer></script>
+<script src="splits.js?v=3.12.0" defer></script>
+<script src="chart.js?v=3.12.0" defer></script>
+<script src="exinfo.js?v=3.12.0" defer></script>
+<script src="body.js?v=3.12.0" defer></script>
+<script src="data.js?v=3.12.0" defer></script>
+<script src="cover.js?v=3.12.0" defer></script>
+<script src="app.js?v=3.12.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -430,6 +431,7 @@
   <!-- WORKOUTS tab -->
   <section id="view-workouts" class="view workouts" hidden aria-labelledby="wo-title">
     <div class="card">
+      <div class="wo-hero" id="wo-hero" hidden><img id="wo-cover" alt=""></div>
       <h2 id="wo-title" class="card-title" tabindex="-1">Training</h2>
       <p id="wo-msg" class="msg" role="status" hidden></p>
       <div class="wo-active" id="wo-active" hidden>
@@ -672,6 +674,23 @@
     </section>
   </section>
 
+  <!-- DELETE ACCOUNT -->
+  <section id="view-delacct" class="card view" hidden aria-labelledby="da-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="da-back">&#8249; Profile</button>
+    </div>
+    <h2 id="da-title" class="card-title" tabindex="-1">Delete account</h2>
+    <p class="note-warn da-warn">This permanently deletes your Taakat account and everything in it: your details, food log, workouts, splits, weigh-ins and cover photo. It can&rsquo;t be undone.</p>
+    <p class="muted small">Other people&rsquo;s accounts aren&rsquo;t touched. Sign-ups are closed, so to use Taakat again you&rsquo;d need to be added back in Supabase.</p>
+    <button type="button" class="btn-secondary" id="da-backup">Download my data first</button>
+    <form id="da-form" novalidate>
+      <label for="da-confirm">Type DELETE to confirm</label>
+      <input id="da-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10">
+      <p id="da-msg" class="msg" role="alert" hidden></p>
+      <button type="submit" class="btn-primary btn-danger" id="da-go" disabled>Delete my account forever</button>
+    </form>
+  </section>
+
   <!-- PAST 7 DAYS -->
   <section id="view-week" class="card view" hidden aria-labelledby="wk-title">
     <div class="sheet-head">
@@ -751,6 +770,16 @@
       <p id="unit-msg" class="msg" role="status" hidden></p>
     </div>
 
+    <div class="card" id="cv-card">
+      <h2 class="card-title">Cover photo</h2>
+      <p class="muted small">Put a photo of your own behind the TRAINING title. It&rsquo;s stored privately &mdash; only you can see it.</p>
+      <div class="cv-preview" id="cv-preview-wrap" hidden><img id="cv-preview" alt="Your cover photo"></div>
+      <input type="file" id="cv-file" accept="image/*" hidden>
+      <button type="button" class="btn-secondary" id="cv-pick">Choose a photo</button>
+      <button type="button" class="btn-link danger-link" id="cv-remove" hidden>Remove photo</button>
+      <p id="cv-msg" class="msg" role="status" hidden></p>
+    </div>
+
     <div class="card" id="dl-card">
       <h2 class="card-title">Your data</h2>
       <p class="muted small">Download everything you&rsquo;ve saved in Taakat &mdash; food, workouts, splits and weigh-ins &mdash; as one file. Keep it somewhere safe, like iCloud Drive or Google Drive.</p>
@@ -796,6 +825,7 @@
 
     <button type="button" class="btn-secondary" id="profile-back">Back to Today</button>
     <button type="button" class="btn-link danger-link" id="logout-btn">Log out</button>
+    <button type="button" class="btn-link danger-link da-open" id="da-open">Delete my account</button>
   </section>
 
   <!-- CAN'T START -->

@@ -712,3 +712,17 @@ input.se-day-name { height: 48px; font-family: var(--font-head); font-size: 20px
 .backup-nudge .small { margin: 4px 0 0; }
 .backup-nudge-btns { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .backup-nudge-btns .btn-secondary { width: auto; padding: 0 18px; height: 48px; }
+
+/* ===================== Cover photo + delete account ===================== */
+.wo-hero { position: relative; height: 210px; margin: -10px calc(-1 * (env(safe-area-inset-right, 0px) + 20px)) 0 calc(-1 * (env(safe-area-inset-left, 0px) + 20px)); overflow: hidden; background: var(--raise); }
+.wo-hero img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.wo-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(18, 18, 17, .05) 0%, rgba(18, 18, 17, .35) 55%, rgba(18, 18, 17, .92) 88%, #121211 100%); }
+.wo-hero:not([hidden]) + #wo-title { position: relative; z-index: 1; margin-top: -72px; margin-bottom: 18px; text-shadow: 0 2px 14px rgba(0, 0, 0, .7); }
+.cv-preview { margin-top: 10px; height: 150px; overflow: hidden; border: 1px solid var(--rule-2); }
+.cv-preview img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+#cv-remove { display: block; }
+.da-open { display: block; margin: 4px auto 0; color: var(--muted); }
+.da-warn { margin-top: 4px; }
+#da-backup { margin-top: 14px; }
+#da-form { margin-top: 22px; }
+.btn-danger { background: var(--bad); color: #121211; }
