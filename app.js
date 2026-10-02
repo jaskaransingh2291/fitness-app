@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.9.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.10.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -42,8 +42,8 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh'];
   var TAB_VIEWS = ['home', 'workouts'];
   var currentView = null;
   function show(name, focusId) {
@@ -678,6 +678,7 @@
       if (workouts) workouts.clear();
       if (splits) splits.clear();
       if (exinfo) exinfo.clear();
+      if (body) body.clear();
       resumeCheckPending = false;
       showLogin('');
       $('login-email').value = '';
@@ -713,9 +714,26 @@
     me: function () { return me; }, current: function () { return currentView; }, version: APP_VERSION, workouts: workouts
   }) : null;
   var exinfo = (window.TaakatExInfo && workouts) ? window.TaakatExInfo({
-    $: $, show: show, focusQuiet: function (el) { focusQuiet(el); }, current: function () { return currentView; },
+    $: $, sb: sb, show: show, focusQuiet: function (el) { focusQuiet(el); }, current: function () { return currentView; }, friendly: friendly,
+    me: function () { return me; }, unit: function () { return profile && profile.weight_unit === 'kg' ? 'kg' : 'lb'; },
     fallback: function () { workouts.open(''); }
   }) : null;
+  var body = (window.TaakatBody && C) ? window.TaakatBody({
+    $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
+    me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; },
+    back: function () { showToday(''); },
+    weightChanged: function (kg) { return weightChanged(kg); }
+  }) : null;
+  /* A new latest weigh-in becomes your weight for targets (decided: automatic). */
+  function weightChanged(kg) {
+    if (!profile || !C.inRange('weight_kg', kg)) return Promise.resolve();
+    return sb.from('profiles').update({ weight_kg: kg }).eq('id', me.id).then(function (res) {
+      if (res.error) throw res.error;
+      profile.weight_kg = kg;
+      return saveTodayTargets(profile).catch(function () { targetsSavedFor = ''; });
+    });
+  }
+  if (body) $('to-weigh').addEventListener('click', function () { body.open(''); });
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
   $('tab-workouts').addEventListener('click', function () { if (currentView !== 'workouts' && workouts) workouts.open(''); });
@@ -1120,6 +1138,7 @@
     if (opts.keepEntries && meals.day() === d) meals.redraw();
     else meals.showDay(d);
     if (resumeCheckPending) { resumeCheckPending = false; workouts.resumeIfActive(); }
+    if (body) body.summary();
     if (targetsSavedFor !== C.localDate()) {
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }

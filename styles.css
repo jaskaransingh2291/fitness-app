@@ -83,7 +83,7 @@ label { font-size: 14px; font-weight: 600; color: var(--muted); }
 label:not(:first-child) { margin-top: 4px; }
 
 /* Inputs */
-input[type="email"], input[type="password"], input[type="text"], select, .search {
+input[type="email"], input[type="password"], input[type="text"], input[type="date"], select, .search {
   width: 100%; height: 52px; padding: 0 14px;
   border-radius: 0; background: var(--raise); border: 1px solid var(--rule-2);
   color: var(--text); font-size: 17px; outline: none;
@@ -648,3 +648,58 @@ input.se-day-name { height: 48px; font-family: var(--font-head); font-size: 20px
 .ei-tips { list-style: none; margin: 0; padding: 0; counter-reset: tip; }
 .ei-tips li { position: relative; padding: 12px 0 12px 40px; border-bottom: 1px solid var(--rule); counter-increment: tip; }
 .ei-tips li::before { content: counter(tip, decimal-leading-zero); position: absolute; left: 0; top: 10px; font-family: var(--font-head); font-size: 22px; font-weight: 800; color: var(--a); }
+
+/* ===================== Charts (chart.js) ===================== */
+.ch { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.ch-grid { stroke: var(--rule); stroke-width: 1; }
+.ch-tick { fill: var(--muted); font-family: var(--font-body); font-size: 12px; font-weight: 500; }
+.ch-line { fill: none; stroke: var(--a); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ch-dot { fill: var(--a); stroke: var(--bg); stroke-width: 2; }
+.ch-dot-muted { fill: var(--muted); }
+.ch-cross { stroke: var(--rule-2); stroke-width: 1; opacity: 0; }
+.ch-cross.on { opacity: 1; }
+.ch-focus { fill: var(--a); stroke: var(--text); stroke-width: 2; opacity: 0; }
+.ch-focus.on { opacity: 1; }
+.ch-hit { fill: transparent; cursor: crosshair; }
+
+/* ===================== Stage 5c-2: progress on the exercise page ===================== */
+.ei-prog-what { margin: 10px 0 0; }
+.ei-prog-change { margin: 2px 0 0; font-family: var(--font-head); font-size: 24px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.ei-readout { margin: 8px 0 4px; font-family: var(--font-head); font-size: 17px; font-weight: 700; letter-spacing: .06em; color: var(--muted-2); min-height: 22px; }
+.ei-chart { margin: 4px 0 0; }
+.ei-prog-msg { margin: 12px 0 0; }
+.ei-bests { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--rule); }
+.ei-bests li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.ei-best-k { grid-column: 1; font-size: 14px; color: var(--muted); font-weight: 600; }
+.ei-best-v { grid-column: 2; grid-row: 1 / span 2; align-self: center; text-align: right; font-family: var(--font-head); font-size: 22px; font-weight: 800; letter-spacing: .02em; }
+.ei-best-d { grid-column: 1; font-size: 13px; color: var(--muted); }
+
+/* ===================== Weigh-ins ===================== */
+.wi-intro { margin: 0; }
+.wi-form { margin-top: 18px; display: flex; flex-direction: column; }
+.wi-entry { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.wi-field { flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.wi-field label { margin: 0; }
+.wi-input-wrap { position: relative; }
+.wi-input-wrap input { height: 72px; padding: 0 64px 0 14px; font-family: var(--font-head); font-size: 44px; font-weight: 800; letter-spacing: .02em; }
+.wi-unit { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; pointer-events: none; }
+.wi-units { flex: 0 0 auto; margin: 0; }
+.wi-date-label { margin-top: 14px; }
+.wi-date { height: 52px; color-scheme: dark; min-width: 0; }
+.wi-empty { margin: 22px 0 0; }
+.wi-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.wi-stat-k { font-family: var(--font-head); font-size: 15px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.wi-stat-v { font-family: var(--font-head); font-size: 40px; font-weight: 800; line-height: 1; }
+.wi-change { margin: 4px 0 0; }
+.wi-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: 8px 0 6px; font-size: 13px; color: var(--muted-2); }
+.wi-legend[hidden] { display: none; }
+.wi-key-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.wi-key-line { width: 18px; height: 2px; background: var(--a); display: inline-block; margin-left: 10px; }
+.wi-list { list-style: none; margin: 0; padding: 0; }
+.wi-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.wi-row .entry-name { font-family: var(--font-head); font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+.wi-del { flex-shrink: 0; padding: 0; }
+@media (max-width: 360px) {
+  .ei-bests li { grid-template-columns: minmax(0, 1fr); }
+  .ei-best-v { grid-column: 1; grid-row: auto; text-align: left; font-size: 20px; }
+}

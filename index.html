@@ -19,15 +19,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.9.0">
-<script src="vendor/supabase.js?v=3.9.0" defer></script>
-<script src="config.js?v=3.9.0" defer></script>
-<script src="calc.js?v=3.9.0" defer></script>
-<script src="meals.js?v=3.9.0" defer></script>
-<script src="workouts.js?v=3.9.0" defer></script>
-<script src="splits.js?v=3.9.0" defer></script>
-<script src="exinfo.js?v=3.9.0" defer></script>
-<script src="app.js?v=3.9.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.10.0">
+<script src="vendor/supabase.js?v=3.10.0" defer></script>
+<script src="config.js?v=3.10.0" defer></script>
+<script src="calc.js?v=3.10.0" defer></script>
+<script src="meals.js?v=3.10.0" defer></script>
+<script src="workouts.js?v=3.10.0" defer></script>
+<script src="splits.js?v=3.10.0" defer></script>
+<script src="chart.js?v=3.10.0" defer></script>
+<script src="exinfo.js?v=3.10.0" defer></script>
+<script src="body.js?v=3.10.0" defer></script>
+<script src="app.js?v=3.10.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -274,6 +276,7 @@
     <p id="day-msg" class="msg" role="alert" hidden></p>
     <button type="button" class="btn-secondary" id="day-retry" hidden>Try again</button>
 
+    <button type="button" class="btn-secondary week-btn" id="to-weigh"><span class="week-btn-text"><b>Weight</b><small id="to-weigh-sub">Log your weight and see your trend</small></span><span aria-hidden="true">&#8250;</span></button>
     <button type="button" class="btn-secondary week-btn" id="to-week"><span class="week-btn-text"><b>Past 7 days</b><small>How your weight is likely changing</small></span><span aria-hidden="true">&#8250;</span></button>
 
     <div class="card numbers-card">
@@ -531,6 +534,13 @@
     <a class="btn-secondary ei-video" id="ei-video" href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer" data-slow-tap>Watch how to do it</a>
     <p class="muted small ei-video-note">Opens a YouTube search in a new tab. The videos are made by other people, so pick one from a coach you trust.</p>
     <p class="note-info ei-own" id="ei-own" hidden></p>
+    <section class="ei-sec ei-prog" id="ei-prog" aria-labelledby="ei-prog-h" hidden>
+      <h3 class="ei-h" id="ei-prog-h">Your progress</h3>
+      <p class="muted small ei-prog-what" id="ei-prog-what"></p>
+      <p class="ei-prog-change" id="ei-prog-change" hidden></p>
+      <p class="ei-readout" id="ei-readout" hidden></p>
+      <div id="ei-prog-body"></div>
+    </section>
     <section class="ei-sec" id="ei-muscles" aria-labelledby="ei-muscles-h">
       <h3 class="ei-h" id="ei-muscles-h">Muscles worked</h3>
       <div class="ei-row" id="ei-main-row"><p class="ei-k">Main</p><p class="ei-v" id="ei-main"></p></div>
@@ -610,6 +620,47 @@
         <button type="submit" class="btn-primary fast-tap" id="se-save">Save changes</button>
       </div>
     </form>
+  </section>
+
+  <!-- WEIGHT: weigh-ins + trend -->
+  <section id="view-weigh" class="card view" hidden aria-labelledby="wi-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="wi-back">&#8249; Today</button>
+    </div>
+    <h2 id="wi-title" class="card-title" tabindex="-1">Weight</h2>
+    <p class="muted small wi-intro">Your latest weigh-in also updates the weight used for your calorie and protein targets. Weigh yourself at the same time of day, e.g. in the morning before eating.</p>
+    <form id="wi-form" class="wi-form" novalidate>
+      <div class="wi-entry">
+        <div class="wi-field">
+          <label for="wi-weight" id="wi-weight-label">Today&rsquo;s weight</label>
+          <div class="wi-input-wrap"><input id="wi-weight" type="text" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0.0"><span class="wi-unit" id="wi-unit-label" aria-hidden="true">kg</span></div>
+        </div>
+        <div class="inline-choices unit-chips wi-units" id="wi-units" role="radiogroup" aria-label="Weight unit">
+          <label class="pill small-pill"><input type="radio" name="wi-unit" value="kg"><span>kg</span></label>
+          <label class="pill small-pill"><input type="radio" name="wi-unit" value="lb"><span>lb</span></label>
+        </div>
+      </div>
+      <label for="wi-date" class="wi-date-label">Date</label>
+      <input id="wi-date" type="date" class="wi-date">
+      <p id="wi-msg" class="msg" role="status" hidden></p>
+      <button type="submit" class="btn-primary fast-tap" id="wi-save">Save today&rsquo;s weight</button>
+    </form>
+    <p class="muted small" id="wi-status" hidden></p>
+    <p class="muted wi-empty" id="wi-empty" hidden>No weigh-ins yet. Your trend shows up here after a few.</p>
+    <section class="ei-sec" id="wi-trend" aria-labelledby="wi-trend-h" hidden>
+      <h3 class="ei-h" id="wi-trend-h">Trend</h3>
+      <div class="wi-stat"><span class="wi-stat-k" id="wi-avg-label">7-day average</span><span class="wi-stat-v" id="wi-avg"></span></div>
+      <p class="muted small wi-change" id="wi-change"></p>
+      <p class="ei-readout" id="wi-readout"></p>
+      <div id="wi-chart" class="ei-chart"></div>
+      <p class="wi-legend" id="wi-legend" aria-hidden="true"><span class="wi-key-dot"></span>Daily weigh-in <span class="wi-key-line"></span>7-day average</p>
+      <p class="muted small">Day-to-day weight jumps around with water and food, so watch the 7-day average, not single days.</p>
+    </section>
+    <section class="ei-sec" aria-labelledby="wi-list-h">
+      <h3 class="ei-h" id="wi-list-h">Weigh-ins</h3>
+      <ul class="wi-list" id="wi-list"></ul>
+      <p class="muted small" id="wi-more" hidden>Showing your latest 60.</p>
+    </section>
   </section>
 
   <!-- PAST 7 DAYS -->
