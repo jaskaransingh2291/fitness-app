@@ -19,14 +19,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.7.0">
-<script src="vendor/supabase.js?v=3.7.0" defer></script>
-<script src="config.js?v=3.7.0" defer></script>
-<script src="calc.js?v=3.7.0" defer></script>
-<script src="meals.js?v=3.7.0" defer></script>
-<script src="workouts.js?v=3.7.0" defer></script>
-<script src="splits.js?v=3.7.0" defer></script>
-<script src="app.js?v=3.7.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.8.0">
+<script src="vendor/supabase.js?v=3.8.0" defer></script>
+<script src="config.js?v=3.8.0" defer></script>
+<script src="calc.js?v=3.8.0" defer></script>
+<script src="meals.js?v=3.8.0" defer></script>
+<script src="workouts.js?v=3.8.0" defer></script>
+<script src="splits.js?v=3.8.0" defer></script>
+<script src="app.js?v=3.8.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -429,7 +429,7 @@
       <p id="wo-err" class="msg" role="alert" hidden></p>
       <button type="button" class="btn-secondary" id="wo-retry" hidden>Try again</button>
     </div>
-    <h3 class="field-legend wo-list-title">Past workouts</h3>
+    <h3 class="field-legend wo-list-title">History</h3>
     <p class="muted small" id="wo-status" hidden></p>
     <p class="muted wo-empty" id="wo-empty" hidden>No workouts yet — they’ll show up here once you’ve done one.</p>
     <ul class="wo-list" id="wo-list"></ul>
@@ -579,22 +579,14 @@
     <form id="se-form" novalidate>
       <label for="se-name">Split name</label>
       <input id="se-name" type="text" maxlength="60" autocomplete="off">
+      <p class="muted small se-help">Tap a day to open it. Tap an exercise to change its sets, reps or rest.</p>
       <div id="se-days" class="se-days"></div>
       <button type="button" class="btn-secondary" id="se-add-day">+ Add a day</button>
-      <p id="se-msg" class="msg" role="alert" hidden></p>
-      <button type="submit" class="btn-primary fast-tap" id="se-save">Save changes</button>
+      <div class="se-savebar">
+        <p id="se-msg" class="msg" role="alert" hidden></p>
+        <button type="submit" class="btn-primary fast-tap" id="se-save">Save changes</button>
+      </div>
     </form>
-  </section>
-
-  <!-- PICK A DIFFERENT DAY -->
-  <section id="view-daypick" class="card view" hidden aria-labelledby="dp-title">
-    <div class="sheet-head">
-      <button type="button" class="btn-link back-link" id="dp-back">&#8249; Training</button>
-    </div>
-    <h2 id="dp-title" class="card-title" tabindex="-1">Pick a day</h2>
-    <p class="muted small" id="dp-sub"></p>
-    <p id="dp-msg" class="msg" role="status" hidden></p>
-    <ul class="wk-days" id="dp-list"></ul>
   </section>
 
   <!-- PAST 7 DAYS -->

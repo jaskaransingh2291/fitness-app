@@ -37,27 +37,35 @@
     if (!it || !it.sets) return '';
     return it.sets + ' × ' + (it.reps || '—') + (it.rest ? ' · rest ' + it.rest : '');
   }
-  /* Check a split before saving. → '' or a problem in plain words. */
-  function splitProblem(name, days) {
-    if (!str(name, 100) || str(name, 100).length > 60) return 'Give the split a name (up to 60 characters).';
-    if (!days.length) return 'A split needs at least one day.';
-    if (days.length > MAX_DAYS) return 'A split can have up to 7 days.';
+  /* Check a split before saving. → { msg, day, item } (day/item are 0-based, −1 = not about one day/item; msg '' = fine). */
+  function splitProblemAt(name, days) {
+    function p(msg, day, item) { return { msg: msg, day: day == null ? -1 : day, item: item == null ? -1 : item }; }
+    if (!str(name, 100) || str(name, 100).length > 60) return p('Give the split a name (up to 60 characters).');
+    if (!days.length) return p('A split needs at least one day.');
+    if (days.length > MAX_DAYS) return p('A split can have up to 7 days.');
     for (var i = 0; i < days.length; i++) {
       var d = days[i];
-      if (!str(d.name, 100) || str(d.name, 100).length > 40) return 'Day ' + (i + 1) + ' needs a name (up to 40 characters).';
-      if (!d.items.length) return '“' + d.name + '” has no exercises yet — add at least one.';
-      if (d.items.length > MAX_ITEMS) return '“' + d.name + '” has more than ' + MAX_ITEMS + ' exercises.';
+      if (!str(d.name, 100) || str(d.name, 100).length > 40) return p('Day ' + (i + 1) + ' needs a name (up to 40 characters).', i);
+      if (!d.items.length) return p('“' + d.name + '” has no exercises yet — add at least one.', i);
+      if (d.items.length > MAX_ITEMS) return p('“' + d.name + '” has more than ' + MAX_ITEMS + ' exercises.', i);
       for (var j = 0; j < d.items.length; j++) {
         var it = d.items[j], s = parseInt(it.sets, 10);
-        if (!(s >= 1 && s <= 10) || String(it.sets).trim() !== String(s)) return '“' + it.name + '” on ' + d.name + ': sets must be a whole number from 1 to 10.';
-        if (String(it.reps || '').length > 20) return '“' + it.name + '”: reps can be up to 20 characters (e.g. “8–12” or “45 sec”).';
+        if (!(s >= 1 && s <= 10) || String(it.sets).trim() !== String(s)) return p('“' + it.name + '” on ' + d.name + ': sets must be a whole number from 1 to 10.', i, j);
+        if (String(it.reps || '').length > 20) return p('“' + it.name + '”: reps can be up to 20 characters (e.g. “8–12” or “45 sec”).', i, j);
       }
     }
-    if (JSON.stringify(days).length > 28000) return 'That split is too big to save.';
-    return '';
+    if (JSON.stringify(days).length > 28000) return p('That split is too big to save.');
+    return p('');
+  }
+  function splitProblem(name, days) { return splitProblemAt(name, days).msg; }
+  /* "6 exercises · 20 sets" */
+  function dayCount(d) {
+    var n = d.items.length, sets = 0;
+    d.items.forEach(function (it) { var x = parseInt(it.sets, 10); if (x > 0) sets += x; });
+    return n + (n === 1 ? ' exercise' : ' exercises') + (n ? ' · ' + sets + (sets === 1 ? ' set' : ' sets') : '');
   }
 
-  var pure = { cleanDays: cleanDays, nextDayNo: nextDayNo, targetText: targetText, splitProblem: splitProblem, MAX_DAYS: MAX_DAYS, MAX_ITEMS: MAX_ITEMS };
+  var pure = { cleanDays: cleanDays, nextDayNo: nextDayNo, targetText: targetText, splitProblem: splitProblem, splitProblemAt: splitProblemAt, dayCount: dayCount, MAX_DAYS: MAX_DAYS, MAX_ITEMS: MAX_ITEMS };
 
   /* ====================================================================== */
   function TaakatSplits(api) {
@@ -139,7 +147,16 @@
     function setStartStyle(splitActive) {
       var s = $('wo-start');
       s.className = splitActive ? 'btn-secondary wo-start-empty' : 'btn-primary wo-start';
-      s.textContent = splitActive ? 'Start an empty workout' : 'Start workout';
+      s.textContent = splitActive ? '+ Empty workout' : 'Start workout';
+      if (splitActive) s.setAttribute('aria-label', 'Start an empty workout'); else s.removeAttribute('aria-label');
+    }
+    /* A button that opens / closes the panel under it. The ▾ is drawn by CSS (.chev). */
+    function chev() { var c = el('span', 'chev'); c.setAttribute('aria-hidden', 'true'); return c; }
+    function disclose(button, panel, open, onToggle) {
+      button.setAttribute('aria-controls', panel.id);
+      function set(o) { button.setAttribute('aria-expanded', o ? 'true' : 'false'); panel.hidden = !o; }
+      set(!!open);
+      button.addEventListener('click', function () { var o = button.getAttribute('aria-expanded') !== 'true'; set(o); if (onToggle) onToggle(o); });
     }
     function drawBlock(hasActiveWorkout) {
       var box = $('wo-split'); box.textContent = '';
@@ -152,24 +169,56 @@
       }
       setStartStyle(true);
       var d = a.days[nextNo - 1] || a.days[0];
-      var head = el('div', 'sp-next');
-      head.appendChild(el('p', 'sp-label', 'Your split · ' + a.name));
-      head.appendChild(el('p', 'sp-label sp-up', 'Next up'));
-      head.appendChild(el('h3', 'sp-day', d.name));
-      head.appendChild(el('p', 'muted small sp-meta', 'Day ' + nextNo + ' of ' + a.days.length + ' · ' + d.items.length + (d.items.length === 1 ? ' exercise' : ' exercises')));
-      box.appendChild(head);
+
+      // NEXT UP · DAY n OF N            [Split name ▾]
+      var top = el('div', 'sp-top');
+      top.appendChild(el('p', 'sp-label sp-up', 'Next up · Day ' + nextNo + ' of ' + a.days.length));
+      var mb = btn('sp-menu-btn', '', function () {}, a.name + ' — split options');
+      mb.id = 'sp-menu-btn';
+      mb.appendChild(el('span', 'sp-menu-name', a.name)); mb.appendChild(chev());
+      top.appendChild(mb);
+      box.appendChild(top);
+
+      var menu = el('div', 'sp-menu'); menu.id = 'sp-menu';
+      if (!hasActiveWorkout) {
+        var ob = btn('sp-mi', 'Start a different day', function () {}); ob.id = 'sp-other'; ob.appendChild(chev());
+        var dl = el('ul', 'sp-days'); dl.id = 'sp-days';
+        a.days.forEach(function (day, i) {
+          var li = el('li');
+          var b = btn('sp-dayopt' + (i + 1 === nextNo ? ' next' : ''), '', function () { startDay(a, i + 1, b); }, 'Start day ' + (i + 1) + ', ' + day.name);
+          b.appendChild(el('span', 'sp-dayopt-name', 'Day ' + (i + 1) + ' · ' + day.name));
+          b.appendChild(el('span', 'sp-dayopt-meta', i + 1 === nextNo ? 'next up' : day.items.length + (day.items.length === 1 ? ' exercise' : ' exercises')));
+          li.appendChild(b); dl.appendChild(li);
+        });
+        menu.appendChild(ob); menu.appendChild(dl);
+        disclose(ob, dl, false);
+      }
+      menu.appendChild(btn('sp-mi', 'Edit this split', function () { openEdit(a); }));
+      menu.appendChild(btn('sp-mi', 'Change split', openChoose));
+      box.appendChild(menu);
+      disclose(mb, menu, false);
+
+      box.appendChild(el('h3', 'sp-day', d.name));
+      box.appendChild(el('p', 'muted small sp-meta', dayCount(d)));
       if (hasActiveWorkout) {
-        box.appendChild(el('p', 'muted small', 'Finish or discard the workout above before starting the next one.'));
+        box.appendChild(el('p', 'muted small sp-wait', 'Finish or discard the workout above before starting the next one.'));
       } else {
         var go = btn('btn-primary sp-start', 'Start day ' + nextNo, function () { startDay(a, nextNo, go); }, 'Start day ' + nextNo + ', ' + d.name);
         go.id = 'sp-start';
         box.appendChild(go);
       }
-      var links = el('div', 'sp-links');
-      if (!hasActiveWorkout) links.appendChild(btn('btn-link', 'Other day', openDayPick));
-      links.appendChild(btn('btn-link', 'Edit split', function () { openEdit(a); }));
-      links.appendChild(btn('btn-link', 'Change split', openChoose));
-      box.appendChild(links);
+      if (d.items.length) {
+        var pb = btn('sp-peek', 'What’s in it', function () {}); pb.id = 'sp-peek'; pb.appendChild(chev());
+        var pl = el('ul', 'sp-peek-list'); pl.id = 'sp-peek-list';
+        d.items.forEach(function (it) {
+          var li = el('li');
+          li.appendChild(el('span', 'sp-peek-name', it.name));
+          li.appendChild(el('span', 'sp-peek-t', it.sets + ' × ' + (it.reps || '—')));
+          pl.appendChild(li);
+        });
+        box.appendChild(pb); box.appendChild(pl);
+        disclose(pb, pl, false);
+      }
       var m = el('p', 'msg', ''); m.id = 'sp-msg'; m.hidden = true; m.setAttribute('role', 'alert');
       box.appendChild(m);
     }
@@ -178,34 +227,15 @@
       if (busy.start) return;
       if (offline('wo-err')) return;
       busy.start = true;
-      if (button) api.setBusy(button, true, 'Starting…');
+      // Buttons with inner layout (the day list) keep their text; plain buttons say "Starting…".
+      function setB(on) { if (!button) return; if (button.children.length) { button.disabled = on; button.classList.toggle('btn-busy', on); if (on) button.setAttribute('aria-busy', 'true'); else button.removeAttribute('aria-busy'); } else api.setBusy(button, on, 'Starting…'); }
+      setB(true);
       var day = split.days[dayNo - 1];
       wk.startSplitWorkout(split, dayNo, day).catch(function (e) {
         console.warn('Start split day failed:', e && (e.code || e.message));
         api.setMsg('wo-err', api.friendly(e) + ' Try again.');
-      }).finally(function () { busy.start = false; if (button) api.setBusy(button, false); });
+      }).finally(function () { busy.start = false; setB(false); });
     }
-
-    /* ---------- pick a different day ---------- */
-    function openDayPick() {
-      var a = active(); if (!a) return;
-      var list = $('dp-list'); list.textContent = '';
-      $('dp-sub').textContent = a.name;
-      a.days.forEach(function (d, i) {
-        var li = el('li');
-        var b = btn('wk-day dp-day', '', function () { startDay(a, i + 1, b); });
-        var t = el('span', 'entry-text');
-        t.appendChild(el('span', 'entry-name', 'Day ' + (i + 1) + ' · ' + d.name));
-        t.appendChild(el('span', 'entry-meta', d.items.length + (d.items.length === 1 ? ' exercise' : ' exercises') + (i + 1 === nextNo ? ' · next up' : '')));
-        b.appendChild(t);
-        b.setAttribute('aria-label', 'Start day ' + (i + 1) + ', ' + d.name);
-        li.appendChild(b); list.appendChild(li);
-      });
-      api.setMsg('dp-msg', '');
-      api.show('daypick');
-      api.focusQuiet($('dp-title'));
-    }
-    $('dp-back').addEventListener('click', function () { wk.open(''); });
 
     /* ---------- choose a split ---------- */
     function openChoose() {
@@ -268,8 +298,15 @@
       var days = $('sv-days'); days.textContent = '';
       s.days.forEach(function (d, i) {
         var sec = el('section', 'sv-day');
-        sec.appendChild(el('h3', 'sv-day-name', 'Day ' + (i + 1) + ' · ' + d.name));
-        var ul = el('ul', 'sv-items');
+        var h = el('h3', 'sv-day-h');
+        var hb = btn('sv-day-btn', '', function () {});
+        hb.appendChild(el('span', 'sv-day-no', 'Day ' + (i + 1)));
+        var tx = el('span', 'sv-day-text');
+        tx.appendChild(el('span', 'sv-day-name', d.name));
+        tx.appendChild(el('span', 'sv-day-count', dayCount(d)));
+        hb.appendChild(tx); hb.appendChild(chev());
+        h.appendChild(hb); sec.appendChild(h);
+        var ul = el('ul', 'sv-items'); ul.id = 'sv-items-' + i;
         d.items.forEach(function (it) {
           var li = el('li');
           li.appendChild(el('span', 'sv-item-name', it.name));
@@ -280,6 +317,7 @@
         });
         if (!d.items.length) ul.appendChild(el('li', 'muted', 'No exercises yet'));
         sec.appendChild(ul); days.appendChild(sec);
+        disclose(hb, ul, i === 0);
       });
       var isOn = kind === 'mine' && a && a.id === s.id;
       $('sv-use').hidden = isOn;
@@ -370,11 +408,14 @@
       }).finally(function () { busy.del = false; });
     });
 
-    /* ---------- edit (or build from blank) ---------- */
+    /* ---------- edit (or build from blank) ----------
+       An accordion: one day open at a time, and inside it one exercise open at a time. */
+    var openDay = 0, openItem = -1, optsOpen = false;
     function openEdit(s) {
       draft = s ? { id: s.id, name: s.name, source_id: s.source_id || null, days: clone(s.days) }
         : { id: null, name: 'My split', source_id: null, days: [{ name: 'Day 1', items: [] }] };
       dirty = !s;
+      openDay = 0; openItem = -1; optsOpen = false;
       $('se-title').textContent = s ? 'Edit split' : 'Build your split';
       $('se-save').textContent = s ? 'Save changes' : 'Save & follow this split';
       $('se-back').dataset.armed = ''; $('se-back').textContent = '‹ Back';
@@ -384,42 +425,85 @@
       api.focusQuiet($('se-title'));
     }
     function setDirty() { dirty = true; api.setMsg('se-msg', ''); }
-    function drawEdit(focusSel) {
+    function tgt(it) { return (String(it.sets).trim() || '?') + ' × ' + (String(it.reps || '').trim() || '—'); }
+    /* Keep a just-opened row on screen (a long day closing above it can push it out of view). */
+    function keepInView(node) {
+      if (!node || !node.getBoundingClientRect) return;
+      var r = node.getBoundingClientRect();
+      if (r.top < 64 || r.top > window.innerHeight - 160) node.scrollIntoView({ block: 'start' });
+    }
+    function drawEdit(focusSel, viewSel) {
       $('se-name').value = draft.name;
       var box = $('se-days'); box.textContent = '';
+      var many = draft.days.length;
       draft.days.forEach(function (d, di) {
-        var sec = el('section', 'se-day');
-        var head = el('div', 'se-day-head');
-        head.appendChild(el('span', 'se-day-no', 'Day ' + (di + 1)));
-        var tools = el('div', 'se-tools');
-        tools.appendChild(btn('se-icon', '↑', function () { moveDay(di, -1); }, 'Move day ' + (di + 1) + ' up'));
-        tools.appendChild(btn('se-icon', '↓', function () { moveDay(di, 1); }, 'Move day ' + (di + 1) + ' down'));
-        var rmDay = btn('se-icon se-x', '✕', function () { removeDay(di, rmDay); }, 'Remove day ' + (di + 1));
-        tools.appendChild(rmDay);
-        head.appendChild(tools);
-        sec.appendChild(head);
-        var nl = el('label', 'sr-only', 'Name of day ' + (di + 1)); var nid = 'se-dn-' + di; nl.htmlFor = nid;
+        var isOpen = di === openDay;
+        var sec = el('section', 'se-day' + (isOpen ? ' open' : ''));
+        // header: DAY n · name · "k exercises · N sets" ▾
+        var h = el('h3', 'se-day-h');
+        var hb = btn('se-day-btn', '', function () {
+          openDay = isOpen ? -1 : di; openItem = -1; optsOpen = false;
+          drawEdit('#se-dh-' + di, '#se-dh-' + di);
+        });
+        hb.id = 'se-dh-' + di;
+        hb.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        hb.setAttribute('aria-controls', 'se-body-' + di);
+        hb.appendChild(el('span', 'se-day-no', 'Day ' + (di + 1)));
+        var tx = el('span', 'se-day-text');
+        var hName = el('span', 'se-day-label', d.name || 'Day ' + (di + 1));
+        var hCount = el('span', 'se-day-count', dayCount(d));
+        tx.appendChild(hName); tx.appendChild(hCount);
+        hb.appendChild(tx); hb.appendChild(chev());
+        h.appendChild(hb); sec.appendChild(h);
+
+        var body = el('div', 'se-body'); body.id = 'se-body-' + di; body.hidden = !isOpen;
+        sec.appendChild(body);
+        box.appendChild(sec);
+        if (!isOpen) return;
+
+        // Day name + ⋯ (move / remove the day)
+        var row = el('div', 'se-dayrow');
+        var f = el('div', 'se-f se-f-grow');
+        var nid = 'se-dn-' + di;
+        var nl = el('label', null, 'Day name'); nl.htmlFor = nid;
         var ni = document.createElement('input'); ni.type = 'text'; ni.id = nid; ni.maxLength = 40; ni.className = 'se-day-name'; ni.value = d.name; ni.autocomplete = 'off';
-        ni.addEventListener('input', function () { d.name = ni.value; setDirty(); });
-        sec.appendChild(nl); sec.appendChild(ni);
+        ni.addEventListener('input', function () { d.name = ni.value; hName.textContent = ni.value || 'Day ' + (di + 1); setDirty(); });
+        f.appendChild(nl); f.appendChild(ni); row.appendChild(f);
+        var more = btn('se-more', '⋯', function () {}, 'Move or remove day ' + (di + 1));
+        more.id = 'se-more-' + di;
+        row.appendChild(more);
+        body.appendChild(row);
+        var opts = el('div', 'se-opts'); opts.id = 'se-opts-' + di;
+        var up = btn('se-tool', '↑\u00a0Up', function () { moveDay(di, -1); }, 'Move day ' + (di + 1) + ' up'); up.id = 'se-dup-' + di; up.disabled = di === 0;
+        var dn = btn('se-tool', '↓\u00a0Down', function () { moveDay(di, 1); }, 'Move day ' + (di + 1) + ' down'); dn.id = 'se-ddn-' + di; dn.disabled = di === many - 1;
+        var rm = btn('se-tool se-x', 'Remove day', function () { removeDay(di, rm); }, 'Remove day ' + (di + 1)); rm.id = 'se-drm-' + di;
+        opts.appendChild(up); opts.appendChild(dn); opts.appendChild(rm);
+        body.appendChild(opts);
+        disclose(more, opts, optsOpen, function (o) { optsOpen = o; });
+
+        // Exercises: compact rows, tap one to change its target
         var ul = el('ul', 'se-items');
         d.items.forEach(function (it, ii) {
-          var li = el('li', 'se-item');
-          var top = el('div', 'se-item-top');
-          top.appendChild(el('span', 'se-item-name', it.name));
-          var t2 = el('div', 'se-tools');
-          t2.appendChild(btn('se-icon', '↑', function () { moveItem(di, ii, -1); }, 'Move ' + it.name + ' up'));
-          t2.appendChild(btn('se-icon', '↓', function () { moveItem(di, ii, 1); }, 'Move ' + it.name + ' down'));
-          t2.appendChild(btn('se-icon se-x', '✕', function () { d.items.splice(ii, 1); setDirty(); drawEdit(); }, 'Remove ' + it.name + ' from ' + d.name));
-          top.appendChild(t2);
-          li.appendChild(top);
+          var io = ii === openItem;
+          var li = el('li', 'se-item' + (io ? ' open' : ''));
+          var ib = btn('se-item-btn', '', function () { openItem = io ? -1 : ii; drawEdit('#se-ib-' + di + '-' + ii); });
+          ib.id = 'se-ib-' + di + '-' + ii;
+          ib.setAttribute('aria-expanded', io ? 'true' : 'false');
+          ib.setAttribute('aria-controls', 'se-ibody-' + di + '-' + ii);
+          ib.appendChild(el('span', 'se-item-name', it.name));
+          var t = el('span', 'se-item-t', tgt(it));
+          ib.appendChild(t); ib.appendChild(chev());
+          li.appendChild(ib);
+          var ibody = el('div', 'se-item-body'); ibody.id = 'se-ibody-' + di + '-' + ii; ibody.hidden = !io;
+          li.appendChild(ibody); ul.appendChild(li);
+          if (!io) return;
           var grid = el('div', 'se-target');
-          function field(labelText, key, mode, max, w) {
+          function field(labelText, key, mode, max) {
             var wrap = el('div', 'se-f');
             var id = 'se-' + key + '-' + di + '-' + ii;
             var l = el('label', null, labelText); l.htmlFor = id;
             var inp = document.createElement('input'); inp.type = 'text'; inp.id = id; inp.inputMode = mode; inp.maxLength = max; inp.autocomplete = 'off'; inp.value = it[key] == null ? '' : String(it[key]);
-            inp.addEventListener('input', function () { it[key] = key === 'sets' ? inp.value.trim() : inp.value; setDirty(); });
+            inp.addEventListener('input', function () { it[key] = key === 'sets' ? inp.value.trim() : inp.value; t.textContent = tgt(it); hCount.textContent = dayCount(d); setDirty(); });
             wrap.appendChild(l); wrap.appendChild(inp); grid.appendChild(wrap);
           }
           field('Sets', 'sets', 'numeric', 2);
@@ -428,40 +512,68 @@
           var rid = 'se-rest-' + di + '-' + ii;
           var rl = el('label', null, 'Rest'); rl.htmlFor = rid;
           var sel = document.createElement('select'); sel.id = rid;
-          var opts = RESTS.slice(); if (it.rest && opts.indexOf(it.rest) === -1) opts.push(it.rest);
-          opts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o || '—'; if (o === (it.rest || '')) op.selected = true; sel.appendChild(op); });
+          var ropts = RESTS.slice(); if (it.rest && ropts.indexOf(it.rest) === -1) ropts.push(it.rest);
+          ropts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o || '—'; if (o === (it.rest || '')) op.selected = true; sel.appendChild(op); });
           sel.addEventListener('change', function () { it.rest = sel.value; setDirty(); });
           rw.appendChild(rl); rw.appendChild(sel); grid.appendChild(rw);
-          li.appendChild(grid);
-          ul.appendChild(li);
+          ibody.appendChild(grid);
+          var tools = el('div', 'se-item-tools');
+          var iu = btn('se-tool', '↑\u00a0Up', function () { moveItem(di, ii, -1); }, 'Move ' + it.name + ' up'); iu.id = 'se-iup-' + di + '-' + ii; iu.disabled = ii === 0;
+          var idn = btn('se-tool', '↓\u00a0Down', function () { moveItem(di, ii, 1); }, 'Move ' + it.name + ' down'); idn.id = 'se-idn-' + di + '-' + ii; idn.disabled = ii === d.items.length - 1;
+          var irm = btn('se-tool se-x', 'Remove', function () {
+            d.items.splice(ii, 1); openItem = -1; setDirty();
+            drawEdit(d.items.length ? '#se-ib-' + di + '-' + Math.min(ii, d.items.length - 1) : '#se-add-ex-' + di);
+            api.setMsg('se-msg', 'Removed ' + it.name + '.', 'ok');
+          }, 'Remove ' + it.name + ' from ' + (d.name || 'this day'));
+          tools.appendChild(iu); tools.appendChild(idn); tools.appendChild(irm);
+          ibody.appendChild(tools);
         });
-        sec.appendChild(ul);
-        var add = btn('btn-link se-add-ex', '+ Add exercise to ' + (d.name || 'this day'), function () { addItem(di); });
+        if (!d.items.length) ul.appendChild(el('li', 'muted small se-none', 'No exercises yet.'));
+        body.appendChild(ul);
+        var add = btn('se-add-ex', '+ Add exercise', function () { addItem(di); }, 'Add an exercise to ' + (d.name || 'day ' + (di + 1)));
+        add.id = 'se-add-ex-' + di;
         add.disabled = d.items.length >= MAX_ITEMS;
-        sec.appendChild(add);
-        box.appendChild(sec);
+        body.appendChild(add);
       });
       $('se-add-day').disabled = draft.days.length >= MAX_DAYS;
-      if (focusSel) { var f = document.querySelector(focusSel); if (f) api.focusQuiet(f); }
+      if (focusSel) { var fo = document.querySelector(focusSel); if (fo) api.focusQuiet(fo); }
+      if (viewSel) keepInView(document.querySelector(viewSel));
     }
     $('se-name').addEventListener('input', function () { draft.name = $('se-name').value; setDirty(); });
     function moveDay(i, dir) {
       var j = i + dir; if (j < 0 || j >= draft.days.length) return;
-      var t = draft.days[i]; draft.days[i] = draft.days[j]; draft.days[j] = t; setDirty(); drawEdit();
+      var t = draft.days[i]; draft.days[i] = draft.days[j]; draft.days[j] = t; setDirty();
+      openDay = j; openItem = -1; optsOpen = true;
+      var keep = '#se-' + (dir < 0 ? 'dup-' : 'ddn-') + j;
+      drawEdit(keep, '#se-dh-' + j);
+      var k = document.querySelector(keep); if (k && k.disabled) api.focusQuiet($('se-more-' + j));
     }
     function moveItem(di, ii, dir) {
       var items = draft.days[di].items, j = ii + dir; if (j < 0 || j >= items.length) return;
-      var t = items[ii]; items[ii] = items[j]; items[j] = t; setDirty(); drawEdit();
+      var t = items[ii]; items[ii] = items[j]; items[j] = t; setDirty();
+      openItem = j;
+      var keep = '#se-' + (dir < 0 ? 'iup-' : 'idn-') + di + '-' + j;
+      drawEdit(keep, '#se-ib-' + di + '-' + j);
+      var k = document.querySelector(keep); if (k && k.disabled) api.focusQuiet($('se-ib-' + di + '-' + j));
     }
     function removeDay(di, b) {
       if (draft.days.length <= 1) { api.setMsg('se-msg', 'A split needs at least one day.'); return; }
-      if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Sure?'; b.classList.add('armed'); setTimeout(function () { if (b.isConnected) { b.dataset.armed = ''; b.textContent = '✕'; b.classList.remove('armed'); } }, 4000); return; }
-      draft.days.splice(di, 1); setDirty(); drawEdit();
+      if (b.dataset.armed !== '1') {
+        b.dataset.armed = '1'; b.textContent = 'Tap again to remove'; b.classList.add('armed');
+        setTimeout(function () { if (b.isConnected) { b.dataset.armed = ''; b.textContent = 'Remove day'; b.classList.remove('armed'); } }, 4000);
+        return;
+      }
+      var name = draft.days[di].name || 'Day ' + (di + 1);
+      draft.days.splice(di, 1); setDirty();
+      openDay = -1; openItem = -1; optsOpen = false;
+      drawEdit('#se-dh-' + Math.min(di, draft.days.length - 1));
+      api.setMsg('se-msg', 'Removed ' + name + '. Save to keep this change.', 'ok');
     }
     $('se-add-day').addEventListener('click', function () {
       if (draft.days.length >= MAX_DAYS) return;
       draft.days.push({ name: 'Day ' + (draft.days.length + 1), items: [] }); setDirty();
-      drawEdit('#se-dn-' + (draft.days.length - 1));
+      openDay = draft.days.length - 1; openItem = -1; optsOpen = false;
+      drawEdit('#se-dn-' + openDay, '#se-dh-' + openDay);
     });
     function addItem(di) {
       var d = draft.days[di];
@@ -471,12 +583,14 @@
         onPick: function (x) {
           d.items.push({ ref: x.id, name: String(x.n).slice(0, 80), sets: 3, reps: x.tt === 'time' || x.tt === 'weight_time' ? '30 sec' : '8–12', rest: '60–90 sec' });
           setDirty();
-          api.show('splitedit'); drawEdit();
-          var items = document.querySelectorAll('#se-days .se-day')[di].querySelectorAll('.se-item');
-          if (items.length && items[items.length - 1].scrollIntoView) items[items.length - 1].scrollIntoView({ block: 'center' });
+          openDay = di; openItem = d.items.length - 1;
+          api.show('splitedit');
+          var sel = '#se-ib-' + di + '-' + openItem;
+          drawEdit(sel);
+          var n = document.querySelector(sel); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'center' });
           api.setMsg('se-msg', 'Added ' + x.n + '. Don’t forget to save.', 'ok');
         },
-        onBack: function () { api.show('splitedit'); drawEdit(); }
+        onBack: function () { api.show('splitedit'); drawEdit('#se-add-ex-' + di); }
       });
     }
     $('se-back').addEventListener('click', function () {
@@ -492,8 +606,20 @@
       var days = draft.days.map(function (d) {
         return { name: str(d.name, 100), items: d.items.map(function (it) { return { ref: it.ref, name: it.name, sets: it.sets, reps: str(String(it.reps || ''), 100), rest: str(it.rest || '', 20) }; }) };
       });
-      var problem = splitProblem(draft.name, days);
-      if (problem) { api.setMsg('se-msg', problem); return; }
+      var pr = splitProblemAt(draft.name, days);
+      if (pr.msg) {
+        // Open the day (and exercise) with the problem so it's right there to fix.
+        if (pr.day >= 0) {
+          openDay = pr.day; openItem = pr.item; optsOpen = false;
+          var at = pr.item >= 0 ? '#se-sets-' + pr.day + '-' + pr.item : '#se-dn-' + pr.day;
+          drawEdit(null);
+          var n = document.querySelector(at); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'center' });
+        } else if (!str(draft.name, 100) || str(draft.name, 100).length > 60) {
+          $('se-name').scrollIntoView({ block: 'center' });
+        }
+        api.setMsg('se-msg', pr.msg);
+        return;
+      }
       days = days.map(function (d) { return { name: d.name, items: d.items.map(function (it) { return { ref: it.ref, name: it.name, sets: parseInt(it.sets, 10), reps: it.reps, rest: it.rest }; }) }; });
       if (offline('se-msg')) return;
       busy.save = true;

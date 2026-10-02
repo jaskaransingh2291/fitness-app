@@ -117,8 +117,25 @@
     return m > 0 && m <= 6 * 60 ? m : null;   // longer than 6 h = forgot to finish; don't show a silly time
   }
 
+  /* Which history group a workout date falls in. Weeks start on Monday.
+     → { key, label }: 'This week', 'Last week', then 'Earlier in October' / 'September' / 'December 2025'. */
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function historyGroup(iso, today) {
+    function d(x) { var p = String(x).split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2], 12); }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(today))) return { key: 'other', label: 'Earlier' };
+    var t = d(today), x = d(iso), day = 86400000;
+    var monday = t - ((new Date(t).getUTCDay() + 6) % 7) * day;
+    if (x >= monday) return { key: 'w0', label: 'This week' };
+    if (x >= monday - 7 * day) return { key: 'w1', label: 'Last week' };
+    var y = +iso.slice(0, 4), m = +iso.slice(5, 7), ty = +today.slice(0, 4), tm = +today.slice(5, 7);
+    var key = 'm' + iso.slice(0, 7);
+    if (y === ty && m === tm) return { key: key, label: 'Earlier in ' + MONTHS[m - 1] };
+    return { key: key, label: MONTHS[m - 1] + (y !== ty ? ' ' + y : '') };
+  }
+
   var pure = { GROUPS: GROUPS, TRACK: TRACK, convert: convert, fmtW: fmtW, fmtTime: fmtTime, parseTime: parseTime, parseReps: parseReps,
-    prepareExercises: prepareExercises, searchExercises: searchExercises, setText: setText, summarise: summarise, minutesBetween: minutesBetween };
+    prepareExercises: prepareExercises, searchExercises: searchExercises, setText: setText, summarise: summarise, minutesBetween: minutesBetween,
+    historyGroup: historyGroup };
 
   /* ====================================================================== */
   function TaakatWorkouts(api) {
@@ -128,6 +145,7 @@
     var session = null;          // workout_sessions row on screen
     var exs = [];                // exercises in it: { id, ref, name, group, tt, position, eq, one, note, rows: [...], last: [...] }
     var sessToken = 0, listToken = 0;
+    var groupOpen = {};          // history groups you opened or closed (key → true/false)
     var pickerFor = null;        // session id the exercise picker adds to
     var busy = {};               // guards against double taps per action
 
@@ -231,26 +249,52 @@
       var list = $('wo-list'); list.textContent = '';
       var done = rows.filter(function (r) { return r !== active; });
       $('wo-empty').hidden = done.length > 0;
+      // Group by This week / Last week / month. Only the newest group starts open; your taps are remembered until you sign out.
+      var groups = [], byKey = {}, today = C.localDate();
       done.forEach(function (r) {
-        var t = summarise(exBy[r.id] || [], u);
-        var li = el('li');
-        var b = el('button', 'wo-item'); b.type = 'button';
-        var left = el('span', 'entry-text');
-        left.appendChild(el('span', 'entry-name', dayText(r.session_date) + (r.split_day ? ' · ' + r.split_day : '')));
-        var bits = [t.exercises + (t.exercises === 1 ? ' exercise' : ' exercises'), t.sets + (t.sets === 1 ? ' set' : ' sets')];
-        var mins = minutesBetween(r.started_at, r.finished_at);
-        if (mins) bits.push(mins + ' min');
-        left.appendChild(el('span', 'entry-meta', bits.join(' · ')));
-        if (!r.finished_at) left.appendChild(el('span', 'wk-flag', 'Not finished'));
-        b.appendChild(left);
-        var right = el('span', 'wo-vol');
-        right.textContent = t.volume ? fmt(t.volume) : '–';
-        right.appendChild(el('small', null, t.volume ? u + ' lifted' : ''));
-        b.appendChild(right);
-        b.setAttribute('aria-label', C.longDate(r.session_date) + (r.split_day ? ', ' + r.split_day : '') + ': ' + bits.join(', ') + (t.volume ? ', ' + fmt(t.volume) + ' ' + u + ' lifted' : '') + '. Open.');
-        b.addEventListener('click', function () { openSession(r.id); });
-        li.appendChild(b); list.appendChild(li);
+        var g = historyGroup(r.session_date, today);
+        if (!byKey[g.key]) { byKey[g.key] = { key: g.key, label: g.label, rows: [] }; groups.push(byKey[g.key]); }
+        byKey[g.key].rows.push(r);
       });
+      groups.forEach(function (g, gi) {
+        var gli = el('li', 'wo-group');
+        var h = el('h4', 'wo-group-h');
+        var hb = el('button', 'wo-group-btn'); hb.type = 'button'; hb.id = 'wo-g-' + gi;
+        var lab = el('span', 'wo-group-label', g.label);
+        lab.appendChild(el('span', 'wo-group-count', ' · ' + g.rows.length + (g.rows.length === 1 ? ' workout' : ' workouts')));
+        hb.appendChild(lab);
+        var c = el('span', 'chev'); c.setAttribute('aria-hidden', 'true'); hb.appendChild(c);
+        h.appendChild(hb); gli.appendChild(h);
+        var ul = el('ul', 'wo-group-list'); ul.id = 'wo-gl-' + gi;
+        hb.setAttribute('aria-controls', ul.id);
+        var isOpen = g.key in groupOpen ? groupOpen[g.key] : gi === 0;
+        function set(o) { hb.setAttribute('aria-expanded', o ? 'true' : 'false'); ul.hidden = !o; }
+        set(isOpen);
+        hb.addEventListener('click', function () { var o = hb.getAttribute('aria-expanded') !== 'true'; groupOpen[g.key] = o; set(o); });
+        g.rows.forEach(function (r) { ul.appendChild(historyRow(r, exBy, u)); });
+        gli.appendChild(ul); list.appendChild(gli);
+      });
+    }
+    function historyRow(r, exBy, u) {
+      var t = summarise(exBy[r.id] || [], u);
+      var li = el('li');
+      var b = el('button', 'wo-item'); b.type = 'button';
+      var left = el('span', 'entry-text');
+      left.appendChild(el('span', 'entry-name', dayText(r.session_date) + (r.split_day ? ' · ' + r.split_day : '')));
+      var bits = [t.exercises + (t.exercises === 1 ? ' exercise' : ' exercises'), t.sets + (t.sets === 1 ? ' set' : ' sets')];
+      var mins = minutesBetween(r.started_at, r.finished_at);
+      if (mins) bits.push(mins + ' min');
+      left.appendChild(el('span', 'entry-meta', bits.join(' · ')));
+      if (!r.finished_at) left.appendChild(el('span', 'wk-flag', 'Not finished'));
+      b.appendChild(left);
+      var right = el('span', 'wo-vol');
+      right.textContent = t.volume ? fmt(t.volume) : '–';
+      right.appendChild(el('small', null, t.volume ? u + ' lifted' : ''));
+      b.appendChild(right);
+      b.setAttribute('aria-label', C.longDate(r.session_date) + (r.split_day ? ', ' + r.split_day : '') + ': ' + bits.join(', ') + (t.volume ? ', ' + fmt(t.volume) + ' ' + u + ' lifted' : '') + '. Open.');
+      b.addEventListener('click', function () { openSession(r.id); });
+      li.appendChild(b);
+      return li;
     }
     $('wo-retry').addEventListener('click', function () { open(''); });
 
@@ -961,7 +1005,7 @@
       pickExercise: pickExercise,
       resumeIfActive: resumeIfActive,
       unitsChanged: unitsChanged,
-      clear: function () { session = null; exs = []; customs = []; recentRefs = []; pickerFor = null; pickMode = { type: 'session' }; sessToken++; listToken++; busy = {}; }
+      clear: function () { groupOpen = {}; session = null; exs = []; customs = []; recentRefs = []; pickerFor = null; pickMode = { type: 'session' }; sessToken++; listToken++; busy = {}; }
     };
   }
 
