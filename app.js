@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.6.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.7.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -42,8 +42,8 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone'];
-  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone'];
+  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'daypick'];
+  var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'daypick'];
   var TAB_VIEWS = ['home', 'workouts'];
   var currentView = null;
   function show(name, focusId) {
@@ -132,7 +132,7 @@
     if (code === 'user_banned') return 'This account is turned off.';
     if (code === '23514') return 'One of those values is outside the allowed range. Please check them.';
     if (code === '42501') return "You don't have permission to do that.";
-    if (code === 'PGRST204' || code === '42703' || code === 'PGRST200') return 'Taakat’s database needs its latest update before this works. (Jas: run the newest database update in Supabase.)';
+    if (code === 'PGRST204' || code === '42703' || code === 'PGRST200' || code === 'PGRST205' || code === '42P01') return 'Taakat’s database needs its latest update before this works. (Jas: run the newest database update in Supabase.)';
     if (code === 'reauthentication_needed' || /reauthenticat/i.test(text)) return 'For safety, please log out, log back in, and try again.';
     if (code === 'same_password' || /should be different/i.test(text)) return 'Your new password must be different from your old one.';
     if (code === 'weak_password' || /weak|password should/i.test(text)) return 'That password is too weak. Try a longer one with a mix of letters and numbers.';
@@ -676,6 +676,7 @@
       clearDrafts();
       if (meals) meals.clear();
       if (workouts) workouts.clear();
+      if (splits) splits.clear();
       resumeCheckPending = false;
       showLogin('');
       $('login-email').value = '';
@@ -703,7 +704,12 @@
 
   var workouts = (window.TaakatWorkouts && C) ? window.TaakatWorkouts({
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
-    me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; }, version: APP_VERSION
+    me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; }, version: APP_VERSION,
+    splits: function () { return splits; }
+  }) : null;
+  var splits = (window.TaakatSplits && workouts) ? window.TaakatSplits({
+    $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
+    me: function () { return me; }, current: function () { return currentView; }, version: APP_VERSION, workouts: workouts
   }) : null;
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
@@ -740,7 +746,7 @@
 
   function enterApp(session, note) {
     if (!session || !session.user) { showLogin(''); return; }
-    if (!C || !meals || !workouts) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
+    if (!C || !meals || !workouts || !splits) { fatal("Part of Taakat didn't load. Check your internet, then tap Try again."); return; }
     me = { id: session.user.id, email: session.user.email || '' };
     homeDay = null;
     resumeCheckPending = true;

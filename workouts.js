@@ -177,12 +177,13 @@
       api.show('workouts');
       api.setMsg('wo-msg', note || '', 'ok');
       $('wo-active').hidden = true; $('wo-start').hidden = false;
+      var spBox = $('wo-split'); spBox.textContent = ''; var ld = el('p', 'muted small', 'Loading your split…'); spBox.appendChild(ld);
       $('wo-list').textContent = '';
       $('wo-empty').hidden = true;
       $('wo-status').textContent = 'Loading your workouts…'; $('wo-status').hidden = false;
       api.setMsg('wo-err', ''); $('wo-retry').hidden = true;
       var uid = me();
-      sb.from('workout_sessions').select('id,session_date,started_at,finished_at,notes').eq('user_id', uid)
+      sb.from('workout_sessions').select('id,session_date,started_at,finished_at,notes,split_day').eq('user_id', uid)
         .order('session_date', { ascending: false }).order('started_at', { ascending: false }).limit(30)
         .then(function (res) {
           if (token !== listToken) return null;
@@ -206,6 +207,7 @@
           if (token !== listToken) return;
           console.warn('Workouts load failed:', e && (e.code || e.message));
           $('wo-status').hidden = true;
+          if (api.splits()) api.splits().renderBlock(false);
           api.setMsg('wo-err', api.friendly(e) + ' Your workouts are safe.');
           $('wo-retry').hidden = false;
         });
@@ -225,6 +227,7 @@
         $('wo-active-sub').textContent = (stale ? dayText(active.session_date) + ' · ' : 'Started ' + timeOfDay(active.started_at) + ' · ') + n + (n === 1 ? ' exercise' : ' exercises');
         $('wo-continue').onclick = function () { openSession(active.id); };
       }
+      if (api.splits()) api.splits().renderBlock(!!active);
       var list = $('wo-list'); list.textContent = '';
       var done = rows.filter(function (r) { return r !== active; });
       $('wo-empty').hidden = done.length > 0;
@@ -233,7 +236,7 @@
         var li = el('li');
         var b = el('button', 'wo-item'); b.type = 'button';
         var left = el('span', 'entry-text');
-        left.appendChild(el('span', 'entry-name', dayText(r.session_date)));
+        left.appendChild(el('span', 'entry-name', dayText(r.session_date) + (r.split_day ? ' · ' + r.split_day : '')));
         var bits = [t.exercises + (t.exercises === 1 ? ' exercise' : ' exercises'), t.sets + (t.sets === 1 ? ' set' : ' sets')];
         var mins = minutesBetween(r.started_at, r.finished_at);
         if (mins) bits.push(mins + ' min');
@@ -244,7 +247,7 @@
         right.textContent = t.volume ? fmt(t.volume) : '–';
         right.appendChild(el('small', null, t.volume ? u + ' lifted' : ''));
         b.appendChild(right);
-        b.setAttribute('aria-label', C.longDate(r.session_date) + ': ' + bits.join(', ') + (t.volume ? ', ' + fmt(t.volume) + ' ' + u + ' lifted' : '') + '. Open.');
+        b.setAttribute('aria-label', C.longDate(r.session_date) + (r.split_day ? ', ' + r.split_day : '') + ': ' + bits.join(', ') + (t.volume ? ', ' + fmt(t.volume) + ' ' + u + ' lifted' : '') + '. Open.');
         b.addEventListener('click', function () { openSession(r.id); });
         li.appendChild(b); list.appendChild(li);
       });
@@ -273,6 +276,41 @@
         }).finally(function () { busy.start = false; api.setBusy(btn, false); });
     }
     $('wo-start').addEventListener('click', startWorkout);
+
+    /* Start a day of your split: the workout opens with that day's exercises and targets already in it. */
+    function startSplitWorkout(split, dayNo, day) {
+      var uid = me();
+      return Promise.all([loadLibrary().catch(function () { return null; }), loadCustoms().catch(function () { return null; })]).then(function () {
+        return sb.from('workout_sessions').select('id,started_at').eq('user_id', uid).is('finished_at', null).order('started_at', { ascending: false }).limit(1);
+      }).then(function (res) {
+        if (res.error) throw res.error;
+        var openNow = (res.data || [])[0];
+        if (openNow && Date.now() - Date.parse(openNow.started_at) < 12 * 3600 * 1000) {
+          openSession(openNow.id, { note: 'You already have a workout going — finish or discard it before starting ' + day.name + '.' });
+          return null;
+        }
+        return sb.from('workout_sessions').insert({ user_id: uid, session_date: C.localDate(), started_at: new Date().toISOString(),
+          split_id: split.id, split_day_no: dayNo, split_name: String(split.name).slice(0, 60), split_day: String(day.name).slice(0, 60) }).select().single();
+      }).then(function (res) {
+        if (!res) return null;
+        if (res.error) throw res.error;
+        var sid = res.data.id;
+        var rows = day.items.slice(0, MAX_EXERCISES).map(function (it, i) {
+          var x = findEx(it.ref) || {};
+          return { session_id: sid, user_id: uid, exercise_ref: it.ref, exercise_name: String(x.n || it.name).slice(0, 80),
+            muscle_group: GROUPS.indexOf(x.g) !== -1 ? x.g : null, tracking_type: TRACK[x.tt] ? x.tt : 'weight_reps', position: i + 1,
+            target_sets: it.sets >= 1 && it.sets <= 10 ? it.sets : null, target_reps: it.reps ? String(it.reps).slice(0, 20) : null, target_rest: it.rest ? String(it.rest).slice(0, 20) : null };
+        });
+        if (!rows.length) return openSession(sid, { fresh: true });
+        return sb.from('workout_exercises').insert(rows).select().then(function (r2) {
+          if (r2.error) {
+            console.warn('Split exercises not added:', r2.error.code || r2.error.message);
+            return openSession(sid, { note: 'The workout started, but its exercises didn’t load in. Add them with + Add exercise, or discard and try again.' });
+          }
+          return openSession(sid);
+        });
+      });
+    }
 
     /* Called once after logging in: if a workout is still going (started in the last 12 h), go straight back to it. */
     function resumeIfActive() {
@@ -370,10 +408,11 @@
       var info = findEx(x.exercise_ref) || {};
       var u = unit();
       var e = { id: x.id, ref: x.exercise_ref, name: x.exercise_name, group: x.muscle_group || info.g || '', tt: TRACK[x.tracking_type] ? x.tracking_type : 'weight_reps',
-        position: x.position, eq: info.eq || '', one: !!info.one, note: info.note || '', last: last, rows: [], msg: '', armed: false };
+        position: x.position, eq: info.eq || '', one: !!info.one, note: info.note || '', last: last, rows: [], msg: '', armed: false,
+        tSets: x.target_sets || null, tReps: x.target_reps || '', tRest: x.target_rest || '' };
       saved.forEach(function (st) { e.rows.push(rowFromSet(st, u)); });
       if (!session || !session.finished_at) {
-        var target = last ? Math.min(last.length, 10) : 3;
+        var target = e.tSets || (last ? Math.min(last.length, 10) : 3);
         while (e.rows.length < target) {
           var i = e.rows.length;
           e.rows.push(plannedRow(last && last[i] ? last[i] : (e.rows[i - 1] || null), u));
@@ -387,10 +426,10 @@
     function renderSession() {
       var s = session, u = unit();
       var finished = !!s.finished_at;
-      $('ws-title').textContent = finished ? 'Workout' : 'Workout in progress';
+      $('ws-title').textContent = s.split_day ? s.split_day : (finished ? 'Workout' : 'Workout in progress');
       var mins = minutesBetween(s.started_at, s.finished_at);
-      $('ws-sub').textContent = finished ? C.longDate(s.session_date) + (mins ? ' · ' + mins + ' min' : '')
-        : C.longDate(s.session_date) + ' · started ' + timeOfDay(s.started_at);
+      $('ws-sub').textContent = (s.split_name ? s.split_name + (s.split_day_no ? ' · day ' + s.split_day_no : '') + ' · ' : '') +
+        (finished ? C.longDate(s.session_date) + (mins ? ' · ' + mins + ' min' : '') : (s.split_day ? 'In progress · ' : '') + 'started ' + timeOfDay(s.started_at));
       $('ws-tools').hidden = false;
       $('ws-finish').hidden = finished;
       $('ws-notes').value = s.notes || '';
@@ -426,6 +465,7 @@
       rm.addEventListener('click', function () { removeExercise(e); });
       head.appendChild(rm);
       card.appendChild(head);
+      if (e.tSets) card.appendChild(el('p', 'ws-target', 'Target ' + e.tSets + ' × ' + (e.tReps || '—') + (e.tRest ? ' · rest ' + e.tRest : '')));
       if (e.note) card.appendChild(el('p', 'ws-ex-note', e.note));
       if (e.last && e.last.length) {
         card.appendChild(el('p', 'ws-last', 'Last time: ' + e.last.map(function (s) { return setText(s, e.tt, u); }).join(' · ')));
@@ -450,6 +490,12 @@
       add.disabled = e.rows.length >= MAX_SETS;
       add.addEventListener('click', function () { addSet(e); });
       tools.appendChild(add);
+      if (!session.finished_at && !e.rows.some(function (r) { return r.done; })) {
+        var sw = el('button', 'btn-link ws-swap', 'Swap'); sw.type = 'button';
+        sw.setAttribute('aria-label', 'Swap ' + e.name + ' for another exercise');
+        sw.addEventListener('click', function () { openPicker({ type: 'swap', e: e }); });
+        tools.appendChild(sw);
+      }
       if (e.rows.length > 1 || (e.rows.length === 1 && e.rows[0].done)) {
         var del = el('button', 'btn-link ws-del-set', '− Remove set'); del.type = 'button';
         del.setAttribute('aria-label', 'Remove the last set of ' + e.name);
@@ -715,11 +761,20 @@
     /* ======================= add an exercise ======================= */
     var pickTimer = null;
     var recentRefs = [];
-    function openPicker() {
-      if (exs.length >= MAX_EXERCISES) { api.setMsg('ws-err', 'That’s the most exercises one workout can hold (' + MAX_EXERCISES + ').'); return; }
-      pickerFor = session.id;
+    var pickMode = { type: 'session' };    // 'session' = add to workout · 'swap' = replace one exercise · 'ext' = someone else (split editor) wants an exercise
+    function openPicker(mode) {
+      pickMode = mode || { type: 'session' };
+      if (pickMode.type === 'session' && exs.length >= MAX_EXERCISES) { api.setMsg('ws-err', 'That’s the most exercises one workout can hold (' + MAX_EXERCISES + ').'); return; }
+      if (pickMode.type !== 'ext') pickerFor = session.id;
       $('xp-search').value = '';
-      setRadio('xp-group', 'all');
+      var g0 = pickMode.type === 'swap' && GROUPS.indexOf(pickMode.e.group) !== -1 ? pickMode.e.group : 'all';
+      setRadio('xp-group', g0);
+      $('xp-title').textContent = pickMode.type === 'swap' ? 'Swap ' + pickMode.e.name : (pickMode.title || 'Add exercise');
+      $('xp-back').textContent = pickMode.type === 'ext' ? '\u2039 Split' : '\u2039 Workout';
+      var planOk = pickMode.type === 'swap' && session && session.split_id && session.split_day_no && api.splits();
+      $('xp-plan-wrap').hidden = !planOk;
+      $('xp-plan').checked = false;
+      $('xn-save').textContent = pickMode.type === 'ext' ? 'Save & add to split' : (pickMode.type === 'swap' ? 'Save & swap it in' : 'Save & add to workout');
       api.setMsg('xp-msg', '');
       $('xp-results').textContent = '';
       $('xp-status').textContent = 'Loading exercises…';
@@ -773,14 +828,55 @@
         txt.appendChild(el('span', 'entry-name', x.n));
         txt.appendChild(el('span', 'entry-meta', [x.g, x.a, x.eq, x.custom ? 'your own' : ''].filter(Boolean).join(' · ')));
         b.appendChild(txt);
-        b.addEventListener('click', function () { addExercise(x); });
+        b.addEventListener('click', function () { handlePick(x); });
         li.appendChild(b); list.appendChild(li);
       });
     }
     $('xp-search').addEventListener('input', function () { clearTimeout(pickTimer); pickTimer = setTimeout(runPick, 120); });
     $('xp-search').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); runPick(); $('xp-search').blur(); } });
     $('xp-groups').addEventListener('change', runPick);
-    $('xp-back').addEventListener('click', function () { backToSession(); });
+    $('xp-back').addEventListener('click', function () {
+      if (pickMode.type === 'ext') { var m = pickMode; pickMode = { type: 'session' }; if (m.onBack) m.onBack(); return; }
+      backToSession();
+    });
+    function handlePick(x) {
+      if (pickMode.type === 'ext') { var m = pickMode; pickMode = { type: 'session' }; m.onPick(x); return; }
+      if (pickMode.type === 'swap') { swapExercise(pickMode.e, x, $('xp-plan').checked && !$('xp-plan-wrap').hidden); return; }
+      addExercise(x);
+    }
+    /* Someone else (the split editor) needs an exercise chosen. */
+    function pickExercise(opts) { openPicker({ type: 'ext', title: opts.title, onPick: opts.onPick, onBack: opts.onBack }); }
+
+    /* Swap one exercise in the workout for another (only before any of its sets are ticked). */
+    function swapExercise(e, x, alsoPlan) {
+      if (busy.swap) return;
+      if (offline('xp-msg')) return;
+      if (!session || session.id !== pickerFor || exs.indexOf(e) === -1) { api.setMsg('xp-msg', 'That workout isn’t open any more. Go back and open it again.'); return; }
+      if (e.rows.some(function (r) { return r.done; })) { api.setMsg('xp-msg', 'You’ve already ticked sets for ' + e.name + ' — add the new exercise instead.'); return; }
+      if (x.id === e.ref) { backToSession(); return; }
+      busy.swap = true;
+      api.setMsg('xp-msg', 'Swapping…', 'ok');
+      var oldRef = e.ref, oldName = e.name;
+      var change = { exercise_ref: x.id, exercise_name: String(x.n).slice(0, 80), muscle_group: GROUPS.indexOf(x.g) !== -1 ? x.g : null, tracking_type: x.tt || 'weight_reps' };
+      Promise.all([sb.from('workout_exercises').update(change).eq('id', e.id).select().single(), lastTimes([x.id], session.id)]).then(function (r) {
+        if (r[0].error) throw r[0].error;
+        var fresh = buildEx(r[0].data, [], r[1][x.id] || null);
+        exs[exs.indexOf(e)] = fresh;
+        api.setMsg('xp-msg', '');
+        var note = 'Swapped ' + oldName + ' for ' + x.n + '.';
+        backToSession(note);
+        if (alsoPlan) {
+          api.splits().swapInPlan(session.split_id, session.split_day_no, oldRef, x).then(function () {
+            api.setMsg('ws-msg', note + ' Your plan is updated too.', 'ok');
+          }).catch(function (err) {
+            api.setMsg('ws-msg', note + ' (Your plan wasn’t changed: ' + (err && err.message && !err.code ? err.message : api.friendly(err)) + ')', 'ok');
+          });
+        }
+      }).catch(function (err) {
+        console.warn('Swap failed:', err && (err.code || err.message));
+        api.setMsg('xp-msg', api.friendly(err) + ' Nothing changed — try again.');
+      }).finally(function () { busy.swap = false; });
+    }
 
     function backToSession(note) {
       if (session && pickerFor === session.id) {
@@ -848,7 +944,7 @@
         customs.push(x);
         api.show('expick');
         busy.custom = false; api.setBusy(btn, false);
-        addExercise(x);
+        handlePick(x);
       }).catch(function (err) {
         console.warn('Custom exercise failed:', err && (err.code || err.message));
         api.setMsg('xn-msg', api.friendly(err) + ' Nothing was saved — try again.');
@@ -861,9 +957,11 @@
     return {
       open: open,
       openSession: openSession,
+      startSplitWorkout: startSplitWorkout,
+      pickExercise: pickExercise,
       resumeIfActive: resumeIfActive,
       unitsChanged: unitsChanged,
-      clear: function () { session = null; exs = []; customs = []; recentRefs = []; pickerFor = null; sessToken++; listToken++; busy = {}; }
+      clear: function () { session = null; exs = []; customs = []; recentRefs = []; pickerFor = null; pickMode = { type: 'session' }; sessToken++; listToken++; busy = {}; }
     };
   }
 

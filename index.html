@@ -19,13 +19,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.6.0">
-<script src="vendor/supabase.js?v=3.6.0" defer></script>
-<script src="config.js?v=3.6.0" defer></script>
-<script src="calc.js?v=3.6.0" defer></script>
-<script src="meals.js?v=3.6.0" defer></script>
-<script src="workouts.js?v=3.6.0" defer></script>
-<script src="app.js?v=3.6.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.7.0">
+<script src="vendor/supabase.js?v=3.7.0" defer></script>
+<script src="config.js?v=3.7.0" defer></script>
+<script src="calc.js?v=3.7.0" defer></script>
+<script src="meals.js?v=3.7.0" defer></script>
+<script src="workouts.js?v=3.7.0" defer></script>
+<script src="splits.js?v=3.7.0" defer></script>
+<script src="app.js?v=3.7.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -423,13 +424,14 @@
         <p class="muted small" id="wo-active-sub"></p>
         <button type="button" class="btn-primary" id="wo-continue">Continue workout</button>
       </div>
+      <div class="sp-block" id="wo-split" hidden></div>
       <button type="button" class="btn-primary wo-start" id="wo-start">Start workout</button>
       <p id="wo-err" class="msg" role="alert" hidden></p>
       <button type="button" class="btn-secondary" id="wo-retry" hidden>Try again</button>
     </div>
     <h3 class="field-legend wo-list-title">Past workouts</h3>
     <p class="muted small" id="wo-status" hidden></p>
-    <p class="muted wo-empty" id="wo-empty" hidden>No workouts yet. Tap <b>Start workout</b> when you&rsquo;re at the gym.</p>
+    <p class="muted wo-empty" id="wo-empty" hidden>No workouts yet — they’ll show up here once you’ve done one.</p>
     <ul class="wo-list" id="wo-list"></ul>
   </section>
 
@@ -480,6 +482,7 @@
       <p class="muted small" id="xp-status" aria-live="polite"></p>
       <button type="button" class="btn-link af-custom" id="xp-custom">Can&rsquo;t find it? Add your own</button>
     </div>
+    <label class="toggle-row xp-plan" id="xp-plan-wrap" hidden><input type="checkbox" id="xp-plan"><span class="toggle" aria-hidden="true"></span><span><b>Also change my plan</b><small>Use this exercise on this day of your split from now on</small></span></label>
     <p id="xp-msg" class="msg" role="status" hidden></p>
     <ul class="results" id="xp-results"></ul>
   </section>
@@ -528,6 +531,70 @@
     </div>
     <ul class="wd-list" id="wd-list"></ul>
     <button type="button" class="btn-primary" id="wd-done">Done</button>
+  </section>
+
+  <!-- CHOOSE A SPLIT -->
+  <section id="view-splits" class="card view" hidden aria-labelledby="sl-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="sl-back">&#8249; Training</button>
+    </div>
+    <h2 id="sl-title" class="card-title" tabindex="-1">Choose a split</h2>
+    <p id="sl-msg" class="msg" role="status" hidden></p>
+    <div id="sl-mine-wrap" hidden>
+      <h3 class="sp-section">Your splits</h3>
+      <ul class="wk-days" id="sl-mine"></ul>
+    </div>
+    <h3 class="sp-section">Ready-made</h3>
+    <ul class="wk-days" id="sl-tpl"></ul>
+    <button type="button" class="btn-secondary" id="sl-blank">Build your own from blank</button>
+  </section>
+
+  <!-- ONE SPLIT -->
+  <section id="view-splitview" class="card view" hidden aria-labelledby="sv-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="sv-back">&#8249; Splits</button>
+    </div>
+    <h2 id="sv-title" class="card-title" tabindex="-1">Split</h2>
+    <p class="muted small" id="sv-meta"></p>
+    <div id="sv-about" class="sv-about">
+      <p><b>Good for:</b> <span id="sv-good"></span></p>
+      <p><b>Trade-off:</b> <span id="sv-trade"></span></p>
+      <p class="muted small" id="sv-sched"></p>
+    </div>
+    <p id="sv-msg" class="msg" role="status" hidden></p>
+    <p class="msg ok" id="sv-on" hidden>You’re following this split.</p>
+    <button type="button" class="btn-primary" id="sv-use">Use this split</button>
+    <button type="button" class="btn-secondary" id="sv-edit" hidden>Edit this split</button>
+    <div id="sv-days" class="sv-days"></div>
+    <button type="button" class="btn-link" id="sv-reset" hidden>Reset to the original plan</button>
+    <button type="button" class="btn-link danger-link" id="sv-delete" hidden>Delete this split</button>
+  </section>
+
+  <!-- EDIT / BUILD A SPLIT -->
+  <section id="view-splitedit" class="card view" hidden aria-labelledby="se-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="se-back">&#8249; Back</button>
+    </div>
+    <h2 id="se-title" class="card-title" tabindex="-1">Edit split</h2>
+    <form id="se-form" novalidate>
+      <label for="se-name">Split name</label>
+      <input id="se-name" type="text" maxlength="60" autocomplete="off">
+      <div id="se-days" class="se-days"></div>
+      <button type="button" class="btn-secondary" id="se-add-day">+ Add a day</button>
+      <p id="se-msg" class="msg" role="alert" hidden></p>
+      <button type="submit" class="btn-primary fast-tap" id="se-save">Save changes</button>
+    </form>
+  </section>
+
+  <!-- PICK A DIFFERENT DAY -->
+  <section id="view-daypick" class="card view" hidden aria-labelledby="dp-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="dp-back">&#8249; Training</button>
+    </div>
+    <h2 id="dp-title" class="card-title" tabindex="-1">Pick a day</h2>
+    <p class="muted small" id="dp-sub"></p>
+    <p id="dp-msg" class="msg" role="status" hidden></p>
+    <ul class="wk-days" id="dp-list"></ul>
   </section>
 
   <!-- PAST 7 DAYS -->
