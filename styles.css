@@ -703,3 +703,12 @@ input.se-day-name { height: 48px; font-family: var(--font-head); font-size: 20px
   .ei-bests li { grid-template-columns: minmax(0, 1fr); }
   .ei-best-v { grid-column: 1; grid-row: auto; text-align: left; font-size: 20px; }
 }
+
+/* ===================== Your data / backup reminder ===================== */
+.dl-last { margin: 8px 0 0; color: var(--muted-2); }
+#dl-save { margin-top: 10px; }
+.backup-nudge { padding: 14px 0 6px; border-top: 2px solid var(--a); border-bottom: 1px solid var(--rule); }
+.backup-nudge-h { margin: 0; font-family: var(--font-head); font-size: 20px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.backup-nudge .small { margin: 4px 0 0; }
+.backup-nudge-btns { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.backup-nudge-btns .btn-secondary { width: auto; padding: 0 18px; height: 48px; }

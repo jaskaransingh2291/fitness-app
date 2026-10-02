@@ -19,17 +19,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.10.0">
-<script src="vendor/supabase.js?v=3.10.0" defer></script>
-<script src="config.js?v=3.10.0" defer></script>
-<script src="calc.js?v=3.10.0" defer></script>
-<script src="meals.js?v=3.10.0" defer></script>
-<script src="workouts.js?v=3.10.0" defer></script>
-<script src="splits.js?v=3.10.0" defer></script>
-<script src="chart.js?v=3.10.0" defer></script>
-<script src="exinfo.js?v=3.10.0" defer></script>
-<script src="body.js?v=3.10.0" defer></script>
-<script src="app.js?v=3.10.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.11.0">
+<script src="vendor/supabase.js?v=3.11.0" defer></script>
+<script src="config.js?v=3.11.0" defer></script>
+<script src="calc.js?v=3.11.0" defer></script>
+<script src="meals.js?v=3.11.0" defer></script>
+<script src="workouts.js?v=3.11.0" defer></script>
+<script src="splits.js?v=3.11.0" defer></script>
+<script src="chart.js?v=3.11.0" defer></script>
+<script src="exinfo.js?v=3.11.0" defer></script>
+<script src="body.js?v=3.11.0" defer></script>
+<script src="data.js?v=3.11.0" defer></script>
+<script src="app.js?v=3.11.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -276,6 +277,14 @@
     <p id="day-msg" class="msg" role="alert" hidden></p>
     <button type="button" class="btn-secondary" id="day-retry" hidden>Try again</button>
 
+    <div class="backup-nudge" id="backup-nudge" role="region" aria-labelledby="backup-nudge-h" hidden>
+      <p class="backup-nudge-h" id="backup-nudge-h">Back up your logs</p>
+      <p class="small" id="backup-nudge-text"></p>
+      <div class="backup-nudge-btns">
+        <button type="button" class="btn-secondary" id="backup-now">Back up now</button>
+        <button type="button" class="btn-link" id="backup-later">Not now</button>
+      </div>
+    </div>
     <button type="button" class="btn-secondary week-btn" id="to-weigh"><span class="week-btn-text"><b>Weight</b><small id="to-weigh-sub">Log your weight and see your trend</small></span><span aria-hidden="true">&#8250;</span></button>
     <button type="button" class="btn-secondary week-btn" id="to-week"><span class="week-btn-text"><b>Past 7 days</b><small>How your weight is likely changing</small></span><span aria-hidden="true">&#8250;</span></button>
 
@@ -740,6 +749,15 @@
       </fieldset>
       <p class="muted small">Sets you already logged keep their numbers — they&rsquo;re just shown in the unit you pick.</p>
       <p id="unit-msg" class="msg" role="status" hidden></p>
+    </div>
+
+    <div class="card" id="dl-card">
+      <h2 class="card-title">Your data</h2>
+      <p class="muted small">Download everything you&rsquo;ve saved in Taakat &mdash; food, workouts, splits and weigh-ins &mdash; as one file. Keep it somewhere safe, like iCloud Drive or Google Drive.</p>
+      <p class="small dl-last" id="dl-last"></p>
+      <button type="button" class="btn-secondary" id="dl-prepare">Download my data</button>
+      <button type="button" class="btn-primary" id="dl-save" hidden>Save the file</button>
+      <p id="dl-msg" class="msg" role="status" hidden></p>
     </div>
 
     <div class="card" id="pw-card">

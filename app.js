@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.10.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.11.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -679,6 +679,7 @@
       if (splits) splits.clear();
       if (exinfo) exinfo.clear();
       if (body) body.clear();
+      if (data) data.clear();
       resumeCheckPending = false;
       showLogin('');
       $('login-email').value = '';
@@ -734,6 +735,11 @@
     });
   }
   if (body) $('to-weigh').addEventListener('click', function () { body.open(''); });
+  var data = (window.TaakatData && C) ? window.TaakatData({
+    $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, focusQuiet: function (el) { focusQuiet(el); },
+    me: function () { return me; }, profile: function () { return profile; }, version: APP_VERSION,
+    openProfileData: function () { openProfile(); var c = $('dl-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); focusQuiet($('dl-prepare')); }
+  }) : null;
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
   $('tab-workouts').addEventListener('click', function () { if (currentView !== 'workouts' && workouts) workouts.open(''); });
@@ -1139,6 +1145,7 @@
     else meals.showDay(d);
     if (resumeCheckPending) { resumeCheckPending = false; workouts.resumeIfActive(); }
     if (body) body.summary();
+    if (data) data.nudge();
     if (targetsSavedFor !== C.localDate()) {
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }
@@ -1180,6 +1187,7 @@
     setRadio('p-unit', p.weight_unit === 'kg' ? 'kg' : 'lb');
     ['profile-msg', 'colour-msg', 'unit-msg'].forEach(function (id) { setMsg(id, ''); });
     resetPwCard('');
+    if (data) data.reset();
     show('profile');
     focusQuiet($('profile-title'));
   }
