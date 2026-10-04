@@ -19,20 +19,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.13.0">
-<script src="vendor/supabase.js?v=3.13.0" defer></script>
-<script src="config.js?v=3.13.0" defer></script>
-<script src="calc.js?v=3.13.0" defer></script>
-<script src="meals.js?v=3.13.0" defer></script>
-<script src="workouts.js?v=3.13.0" defer></script>
-<script src="splits.js?v=3.13.0" defer></script>
-<script src="chart.js?v=3.13.0" defer></script>
-<script src="exinfo.js?v=3.13.0" defer></script>
-<script src="body.js?v=3.13.0" defer></script>
-<script src="data.js?v=3.13.0" defer></script>
-<script src="cover.js?v=3.13.0" defer></script>
-<script src="crew.js?v=3.13.0" defer></script>
-<script src="app.js?v=3.13.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.14.0">
+<script src="vendor/supabase.js?v=3.14.0" defer></script>
+<script src="config.js?v=3.14.0" defer></script>
+<script src="calc.js?v=3.14.0" defer></script>
+<script src="meals.js?v=3.14.0" defer></script>
+<script src="workouts.js?v=3.14.0" defer></script>
+<script src="splits.js?v=3.14.0" defer></script>
+<script src="chart.js?v=3.14.0" defer></script>
+<script src="exinfo.js?v=3.14.0" defer></script>
+<script src="body.js?v=3.14.0" defer></script>
+<script src="data.js?v=3.14.0" defer></script>
+<script src="cover.js?v=3.14.0" defer></script>
+<script src="crew.js?v=3.14.0" defer></script>
+<script src="app.js?v=3.14.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -145,8 +145,17 @@
       </svg>
     </svg>
     <h1 class="topbar-title" id="topbar-title">Taakat</h1>
+    <button type="button" class="who-btn" id="who-btn" aria-expanded="false" aria-controls="who-menu" hidden><span id="who-name">Me</span><span class="chev" aria-hidden="true"></span></button>
     <button type="button" class="topbar-me" id="to-profile" aria-label="Profile and settings">J</button>
   </header>
+  <div class="who-menu" id="who-menu" role="region" aria-label="Whose logs to show" hidden>
+    <p class="who-menu-h">Show logs for</p>
+    <div id="who-list"></div>
+  </div>
+  <div class="view-bar" id="view-bar" role="status" hidden>
+    <span id="view-bar-text">Viewing · view only</span>
+    <button type="button" class="btn-link view-bar-back" id="view-bar-back">Back to me</button>
+  </div>
 
   <!-- PROFILE COULDN'T LOAD (never show setup just because the internet failed) -->
   <section id="view-profile-error" class="card view" hidden aria-labelledby="perr-title">

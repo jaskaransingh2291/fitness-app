@@ -44,7 +44,7 @@
         var other = {};
         (r[1].data || []).forEach(function (l) { other[l.id] = l.requester_id === user.id ? l.addressee_id : l.requester_id; });
         var rows = (r[0].data || []).map(function (x) { return Object.assign({}, x, { other_id: other[x.link_id] || null }); });
-        if (t === token && me() && me().id === user.id) { links = sortLinks(rows); loadedFor = user.id; }
+        if (t === token && me() && me().id === user.id) { links = sortLinks(rows); loadedFor = user.id; if (api.loaded) api.loaded(); }
         return links;
       });
     }

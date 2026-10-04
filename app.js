@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.13.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.14.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -62,6 +62,7 @@
     }
     if (inApp) { try { window.scrollTo(0, 0); } catch (e) { /* ignore */ } }
     currentView = name;
+    if (typeof updateWho === 'function' && me) { try { updateWho(); } catch (e) { /* switcher not ready yet */ } }
     if (focusId) {
       var f = $(focusId);
       // Don't pop up the phone keyboard on first load; only focus when asked.
@@ -682,6 +683,7 @@
       if (data) data.clear();
       if (cover) cover.clear();
       if (crew) crew.clear();
+      viewing = null; document.body.classList.remove('viewing'); closeWho();
       resumeCheckPending = false;
       showLogin(note || '', kind);
       $('login-email').value = '';
@@ -704,8 +706,13 @@
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; },
     showToday: function (note, opts) { showToday(note, opts); }, version: APP_VERSION,
-    viewedDay: function () { return viewedDay(); }
+    viewedDay: function () { return viewedDay(); },
+    owner: function () { return viewing ? { id: viewing.id } : me; },
+    ownerProfile: function () { return viewing ? viewing.profile : profile; },
+    ownerName: function () { return viewing ? viewing.name : null; },
+    viewOnly: function () { return !!viewing; }
   }) : null;
+  var viewing = null;   // crew view: { id, name, profile } of the person whose logs are on screen (view only), or null = you
 
   var workouts = (window.TaakatWorkouts && C) ? window.TaakatWorkouts({
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
@@ -750,7 +757,12 @@
   var crew = (window.TaakatCrew && C) ? window.TaakatCrew({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly,
     me: function () { return me; }, current: function () { return currentView; },
-    openProfileCrew: function () { openProfile(); var c = $('crew-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); }
+    openProfileCrew: function () { openProfile(); var c = $('crew-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); },
+    crewChanged: function () {
+      if (viewing && !crew.accepted().some(function (x) { return x.otherId === viewing.id; })) stopViewing(true);
+      updateWho();
+    },
+    loaded: function () { updateWho(); }
   }) : null;
 
   /* Delete account: removes the cover photo (Supabase only allows that through its photo service), then
@@ -791,7 +803,10 @@
   });
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
-  $('tab-workouts').addEventListener('click', function () { if (currentView !== 'workouts' && workouts) workouts.open(''); });
+  $('tab-workouts').addEventListener('click', function () {
+    if (viewing) stopViewing(true);            // (crew view of workouts comes in the next stage)
+    if (currentView !== 'workouts' && workouts) workouts.open('');
+  });
 
   function fmt(n) { return Number(n).toLocaleString('en-CA'); }
   function numOrNull(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
@@ -1133,7 +1148,13 @@
 
   function renderNumbers(prefix, p) {
     var n = C.numbers(p);
-    if (!n.ok) return n;
+    if (!n.ok) {   // e.g. a crew member who hasn't finished setting up: never leave someone else's numbers on screen
+      [prefix + '-target', prefix + '-maint', prefix + '-bmi'].forEach(function (id) { if ($(id)) $(id).textContent = '–'; });
+      if ($(prefix + '-bf-wrap')) $(prefix + '-bf-wrap').hidden = true;
+      if ($(prefix + '-diff')) $(prefix + '-diff').textContent = '';
+      if ($(prefix + '-notes')) $(prefix + '-notes').textContent = '';
+      return n;
+    }
     $(prefix + '-target').textContent = fmt(n.target);
     if (prefix === 'home') $(prefix + '-target').appendChild(makeEl('small', null, 'kcal'));
     var maintEl = $(prefix + '-maint'); maintEl.textContent = fmt(n.maintenance);
@@ -1178,7 +1199,8 @@
     opts = opts || {};
     if (opts.day !== undefined) homeDay = opts.day;
     var today = C.localDate(), d = viewedDay();
-    $('home-title').textContent = 'Hi, ' + profile.display_name;
+    var v = viewing, p = v ? v.profile : profile;
+    $('home-title').textContent = v ? v.name + '’s day' : 'Hi, ' + profile.display_name;
     $('to-profile').textContent = (String(profile.display_name || '?').trim().charAt(0) || '?').toUpperCase();
     $('day-name').textContent = C.dayName(d, today);
     $('home-date').textContent = C.longDate(d);
@@ -1186,12 +1208,18 @@
     $('day-prev').disabled = C.daysBetween(d, today) >= DAYS_BACK;
     $('day-today').hidden = d === today;
     $('view-home').classList.toggle('past-day', d !== today);
-    $('numbers-card-title').textContent = d === today ? 'Your numbers' : 'Your numbers right now';
-    renderNumbers('home', profile);
+    $('numbers-card-title').textContent = v ? v.name + '’s numbers' + (d === today ? '' : ' right now') : (d === today ? 'Your numbers' : 'Your numbers right now');
+    renderNumbers('home', p);
     setMsg('home-msg', note || '', 'ok');
     show('home');
     if (opts.keepEntries && meals.day() === d) meals.redraw();
     else meals.showDay(d);
+    updateWho();
+    if (v) {
+      // someone else's day: nothing of yours runs here (no reminders, no saving targets, no weigh-in row)
+      $('backup-nudge').hidden = true; $('crew-notice').hidden = true;
+      return;
+    }
     if (resumeCheckPending) { resumeCheckPending = false; workouts.resumeIfActive(); }
     if (body) body.summary();
     if (data) data.nudge();
@@ -1200,7 +1228,75 @@
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }
   }
-  $('to-profile').addEventListener('click', function () { openProfile(); });
+  $('to-profile').addEventListener('click', function () { if (viewing) stopViewing(true); openProfile(); });
+
+  /* ---------- Crew view: the "JAS ▾" switcher ---------- */
+  function firstName(n) { return String(n || '').trim().split(/\s+/)[0] || 'Me'; }
+  function updateWho() {
+    var list = crew ? crew.accepted() : [];
+    var onTab = currentView === 'home';
+    var btn = $('who-btn');
+    btn.hidden = !onTab || (!list.length && !viewing);
+    $('who-name').textContent = viewing ? firstName(viewing.name) : (profile ? firstName(profile.display_name) : 'Me');
+    btn.setAttribute('aria-label', 'Showing ' + (viewing ? viewing.name + '’s' : 'your') + ' logs. Change whose logs to show.');
+    $('topbar').classList.toggle('has-who', !btn.hidden);
+    if (btn.hidden) closeWho();
+    $('view-bar').hidden = !viewing || (currentView !== 'home' && currentView !== 'week');
+    if (viewing) $('view-bar-text').textContent = 'Viewing ' + viewing.name + ' · view only';
+  }
+  function closeWho() { $('who-menu').hidden = true; $('who-btn').setAttribute('aria-expanded', 'false'); }
+  $('who-btn').addEventListener('click', function () {
+    var menu = $('who-menu');
+    if (!menu.hidden) { closeWho(); return; }
+    var list = $('who-list'); list.textContent = '';
+    function opt(label, sub, active, go) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'who-opt' + (active ? ' on' : '');
+      var t = document.createElement('span'); t.className = 'who-opt-name'; t.textContent = label; b.appendChild(t);
+      var m = document.createElement('span'); m.className = 'who-opt-sub'; m.textContent = sub; b.appendChild(m);
+      if (active) b.setAttribute('aria-current', 'true');
+      b.addEventListener('click', go);
+      list.appendChild(b);
+    }
+    opt('Me' + (profile ? ' (' + profile.display_name + ')' : ''), 'Your logs', !viewing, function () { closeWho(); if (viewing) stopViewing(); });
+    (crew ? crew.accepted() : []).forEach(function (x) {
+      opt(x.name, 'View only', viewing && viewing.id === x.otherId, function (ev) { startViewing(x, ev.currentTarget); });
+    });
+    menu.hidden = false; $('who-btn').setAttribute('aria-expanded', 'true');
+  });
+  $('view-bar-back').addEventListener('click', function () { stopViewing(); });
+  var viewBusy = false, viewToken = 0;
+  function startViewing(x, b) {
+    if (viewBusy || !x.otherId) return;
+    if (viewing && viewing.id === x.otherId) { closeWho(); return; }
+    viewBusy = true;
+    var t = ++viewToken;
+    if (b) b.classList.add('btn-busy');
+    sb.from('profiles').select('*').eq('id', x.otherId).maybeSingle().then(function (res) {
+      if (res.error) throw res.error;
+      if (!res.data) throw Object.assign(new Error('not shared'), { taakat: x.name + ' isn’t sharing with you any more.' });
+      if (t !== viewToken || !me) return;
+      viewing = { id: x.otherId, name: x.name, profile: normalise(res.data) };
+      var fav = accentByKey(viewing.profile.accent_color) || ACCENTS[0];
+      setAccent(fav);                 // their colour, so it's obvious whose logs these are
+      document.body.classList.add('viewing');
+      closeWho();
+      homeDay = null;
+      showToday('');
+    }).catch(function (e) {
+      console.warn('Crew view failed:', e && (e.code || e.message));
+      closeWho();
+      setMsg('home-msg', e && e.taakat ? e.taakat : friendly(e));
+      if (crew) crew.load().then(updateWho).catch(function () {});
+    }).finally(function () { viewBusy = false; if (b) b.classList.remove('btn-busy'); });
+  }
+  function stopViewing(quiet) {
+    if (!viewing) return;
+    viewing = null; viewToken++;
+    document.body.classList.remove('viewing');
+    applyProfileAccent(profile);
+    closeWho();
+    if (!quiet) { homeDay = null; showToday(''); } else updateWho();
+  }
   function stepDay(n) {
     var today = C.localDate();
     var d = C.addDays(viewedDay(), n);

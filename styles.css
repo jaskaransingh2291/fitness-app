@@ -739,3 +739,25 @@ input.se-day-name { height: 48px; font-family: var(--font-head); font-size: 20px
 .crew-btns .btn-link { padding: 0; }
 .crew-none { margin: 0; }
 .crew-form { margin-top: 14px; }
+
+/* ===================== Crew view: switcher + view-only bar ===================== */
+.who-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; max-width: 46%; padding: 0 12px; border: 1.5px solid var(--a); background: transparent; color: var(--text);
+  font-family: var(--font-head); font-size: 17px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.who-btn #who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-btn:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.who-menu { width: 100%; margin-top: -10px; border: 1px solid var(--rule-2); background: var(--raise); }
+.who-menu-h { margin: 0; padding: 10px 14px 4px; font-family: var(--font-head); font-size: 14px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.who-opt { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 56px; padding: 8px 14px; border: none; border-top: 1px solid var(--rule); background: transparent; color: var(--text); text-align: left; }
+.who-opt.on { box-shadow: inset 4px 0 0 var(--a); }
+.who-opt-name { font-family: var(--font-head); font-size: 20px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
+.who-opt-sub { font-size: 13px; color: var(--muted); }
+.who-opt:focus-visible { outline: 3px solid var(--text); outline-offset: -3px; }
+.view-bar { width: 100%; margin-top: -10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 4px 12px; background: var(--a); color: var(--on-a);
+  font-family: var(--font-head); font-size: 16px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.view-bar-back { color: var(--on-a); font-family: var(--font-body); font-weight: 700; letter-spacing: 0; text-transform: none; padding: 0; }
+body.viewing .add-bar, body.viewing #to-weigh { display: none !important; }
+body.viewing.tabs-on .view.home { padding-bottom: calc(24px + var(--tabbar-h)); }
+.entry-ro { cursor: default; }
+.topbar-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-btn { flex-shrink: 1; min-width: 0; }
+@media (max-width: 380px) { .topbar.has-who .topbar-title { display: none; } .topbar.has-who .who-btn { margin-left: auto; max-width: none; } }

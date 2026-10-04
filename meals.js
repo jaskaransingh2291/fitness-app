@@ -153,10 +153,10 @@
       api.setMsg('day-msg', ''); $('day-retry').hidden = true;
       // For an earlier day, also fetch the target that was saved that day (a missing one is fine).
       var targetQ = isPast
-        ? sb.from('daily_targets').select('log_date,goal,weight_kg,maintenance_kcal,target_kcal').eq('user_id', api.me().id).eq('log_date', day).maybeSingle()
+        ? sb.from('daily_targets').select('log_date,goal,weight_kg,maintenance_kcal,target_kcal').eq('user_id', api.owner().id).eq('log_date', day).maybeSingle()
           .then(function (r) { return r && !r.error ? r.data : null; }, function () { return null; })
         : Promise.resolve(null);
-      var foodQ = sb.from('food_log').select('*').eq('user_id', api.me().id).eq('log_date', day).order('created_at', { ascending: true });
+      var foodQ = sb.from('food_log').select('*').eq('user_id', api.owner().id).eq('log_date', day).order('created_at', { ascending: true });
       return Promise.all([foodQ, targetQ])
         .then(function (both) {
           var res = both[0];
@@ -179,7 +179,7 @@
     /* Target + maintenance for the day on screen: today = your profile now; an earlier day = what was
        saved that day (falls back to your current numbers if nothing was saved). */
     function dayNumbers() {
-      var p = api.profile();
+      var p = api.ownerProfile() || {};
       var isPast = day && day !== C.localDate();
       var row = isPast && dayTarget && dayTarget.log_date === day ? dayTarget : null;
       var n = C.numbers(row ? Object.assign({}, p, { weight_kg: Number(row.weight_kg) || p.weight_kg, goal: row.goal || p.goal }) : p);
@@ -192,7 +192,7 @@
       var target = n.ok ? n.target : 0, maint = n.ok ? n.maintenance : 0;
       var note = $('day-note');
       note.hidden = loading || !isPast || dn.fromSaved;
-      note.textContent = 'No target was saved for this day, so your current target is used.';
+      note.textContent = api.viewOnly() ? 'No target was saved for this day, so ' + api.ownerName() + '’s current target is used.' : 'No target was saved for this day, so your current target is used.';
       // gauge: eaten vs target
       var left = target - t.kcal, over = left < 0;
       var frac = target > 0 ? Math.min(1, t.kcal / target) : 0;
@@ -207,7 +207,8 @@
       $('home-eaten-line').textContent = loading ? (isPast ? 'Loading that day’s food…' : 'Loading today’s food…') : 'Eaten ' + fmt(t.kcal) + ' of ' + fmt(target) + ' kcal';
       var overEl = $('home-over');
       overEl.hidden = !over || loading;
-      if (over) overEl.textContent = isPast ? 'You were ' + fmt(-left) + ' kcal over that day’s target.' : 'You’re ' + fmt(-left) + ' kcal over today’s target.';
+      var subj = api.viewOnly() ? api.ownerName() + (isPast ? ' was ' : ' is ') : (isPast ? 'You were ' : 'You’re ');
+      if (over) overEl.textContent = subj + fmt(-left) + ' kcal over ' + (isPast ? 'that day’s' : 'today’s') + ' target.';
       // deficit / surplus vs maintenance
       var vsMaint = maint - t.kcal;
       $('home-def-label').textContent = (vsMaint >= 0 ? 'Deficit' : 'Surplus') + (isPast ? '' : ' so far');
@@ -261,17 +262,21 @@
         var head = el('div', 'meal-head');
         head.appendChild(el('h3', 'meal-title', m.label));
         head.appendChild(el('span', 'meal-kcal', loading ? '' : fmt(b.kcal) + ' kcal'));
-        var add = el('button', 'meal-add', '+ Add'); add.type = 'button';
-        add.setAttribute('aria-label', 'Add food to ' + m.label);
-        add.addEventListener('click', function () { openAdd(m.key); });
-        head.appendChild(add);
+        var ro = api.viewOnly();
+        if (!ro) {
+          var add = el('button', 'meal-add', '+ Add'); add.type = 'button';
+          add.setAttribute('aria-label', 'Add food to ' + m.label);
+          add.addEventListener('click', function () { openAdd(m.key); });
+          head.appendChild(add);
+        }
         card.appendChild(head);
         if (!loading && !failed && b.items.length === 0) card.appendChild(el('p', 'meal-empty', 'Nothing logged yet'));
         if (b.items.length) {
           var ul = el('ul', 'entries');
           b.items.forEach(function (e) {
             var li = el('li');
-            var btn = el('button', 'entry'); btn.type = 'button';
+            var btn = ro ? el('div', 'entry entry-ro') : el('button', 'entry');
+            if (!ro) btn.type = 'button';
             btn.setAttribute('data-id', e.id);
             var txt = el('span', 'entry-text');
             txt.appendChild(el('span', 'entry-name', e.food_name));
@@ -281,8 +286,10 @@
             right.appendChild(el('span', 'entry-kcal', fmt(e.kcal)));
             right.appendChild(el('span', 'entry-p', g1(e.protein_g) + ' P'));
             btn.appendChild(right);
-            btn.setAttribute('aria-label', 'Edit ' + e.food_name + ', ' + fmt(e.kcal) + ' kilocalories');
-            btn.addEventListener('click', function () { openEdit(e); });
+            if (!ro) {
+              btn.setAttribute('aria-label', 'Edit ' + e.food_name + ', ' + fmt(e.kcal) + ' kilocalories');
+              btn.addEventListener('click', function () { openEdit(e); });
+            }
             li.appendChild(btn); ul.appendChild(li);
           });
           card.appendChild(ul);
@@ -301,6 +308,7 @@
     /* ---------- Log food: search ---------- */
     var searchTimer = null;
     function openAdd(meal) {
+      if (api.viewOnly()) return;     // never log food into someone else's day
       editing = null;
       setRadio('af-meal', meal || defaultMeal());
       $('af-search').value = '';
@@ -596,6 +604,7 @@
 
     /* ---------- edit an existing entry ---------- */
     function openEdit(e) {
+      if (api.viewOnly()) return;
       if (e.source !== 'custom' && e.source_ref) {
         loadFoods().then(function () {
           var f = findFood(e.source_ref);
@@ -678,7 +687,8 @@
       api.setMsg('wk-msg', ''); $('wk-retry').hidden = true;
       api.show('week');
       api.focusQuiet($('wk-title'));
-      var uid = api.me().id;
+      var uid = api.owner().id, who = api.ownerName();
+      $('wk-title').textContent = who ? who + '’s past 7 days' : 'Past 7 days';
       Promise.all([
         sb.from('food_log').select('log_date,kcal').eq('user_id', uid).gte('log_date', first).lte('log_date', last).limit(5000),
         sb.from('daily_targets').select('log_date,maintenance_kcal').eq('user_id', uid).gte('log_date', first).lte('log_date', last)
@@ -688,7 +698,7 @@
         var eaten = {}, maint = {};
         (both[0].data || []).forEach(function (r) { eaten[r.log_date] = (eaten[r.log_date] || 0) + (Number(r.kcal) || 0); });
         if (!both[1].error) (both[1].data || []).forEach(function (r) { maint[r.log_date] = Number(r.maintenance_kcal) || 0; });
-        var now = C.numbers(api.profile());
+        var now = C.numbers(api.ownerProfile());
         var fallback = now.ok ? now.maintenance : 0;
         var days = [];
         for (var i = 7; i >= 1; i--) {
@@ -710,13 +720,15 @@
       var res = $('wk-result');
       if (!est.ready) {
         res.className = 'wk-result waiting';
-        $('wk-headline').textContent = 'Log at least ' + C.WEEK_MIN_DAYS + ' days to see your estimate.';
-        $('wk-sub').textContent = 'You have ' + est.loggedDays + ' of the last 7 days logged so far.';
+        var who = api.ownerName();
+        $('wk-headline').textContent = who ? who + ' needs at least ' + C.WEEK_MIN_DAYS + ' logged days for an estimate.' : 'Log at least ' + C.WEEK_MIN_DAYS + ' days to see your estimate.';
+        $('wk-sub').textContent = (who ? who + ' has ' : 'You have ') + est.loggedDays + ' of the last 7 days logged so far.';
       } else {
         res.className = 'wk-result ready ' + est.direction;
+        var nm = api.ownerName();
         $('wk-headline').textContent = est.direction === 'same'
-          ? 'Based on the past 7 days, your weight has likely stayed about the same.'
-          : 'Based on the past 7 days, you have likely ' + est.direction + ' about ' + est.kg + ' kg.';
+          ? 'Based on the past 7 days, ' + (nm ? nm + '’s' : 'your') + ' weight has likely stayed about the same.'
+          : 'Based on the past 7 days, ' + (nm ? nm + ' has' : 'you have') + ' likely ' + est.direction + ' about ' + est.kg + ' kg.';
         var tot = est.totalDiff;
         $('wk-sub').textContent = 'From ' + est.loggedDays + ' logged day' + (est.loggedDays === 1 ? '' : 's') + ' · ' +
           (tot < 0 ? fmt(-tot) + ' kcal below maintenance in total' : tot > 0 ? fmt(tot) + ' kcal above maintenance in total' : 'right on maintenance');
@@ -748,7 +760,7 @@
         li.appendChild(b); list.appendChild(li);
       });
       if (anyFallback) {
-        var li2 = el('li', 'wk-foot muted small', '* No numbers were saved that day, so your current maintenance is used.');
+        var li2 = el('li', 'wk-foot muted small', '* No numbers were saved that day, so ' + (api.ownerName() ? api.ownerName() + '’s' : 'your') + ' current maintenance is used.');
         list.appendChild(li2);
       }
     }
