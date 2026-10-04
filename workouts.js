@@ -155,6 +155,9 @@
     function unit() { var p = api.profile(); return p && p.weight_unit === 'kg' ? 'kg' : 'lb'; }
     function fmt(n) { return Math.round(Number(n) || 0).toLocaleString('en-CA'); }
     function me() { return api.me().id; }
+    /* Crew view: whose workouts are on screen (you, or someone sharing with you — then everything is view only). */
+    function owner() { return api.owner ? api.owner().id : me(); }
+    function ro() { return !!(api.viewOnly && api.viewOnly()); }
     function offline(msgId) { if (navigator.onLine) return false; api.setMsg(msgId, "You're offline. Connect to the internet and try again — nothing was lost."); return true; }
     function timeOfDay(iso) { try { return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
     function dayText(iso) { var t = C.localDate(); var n = C.dayName(iso, t); return n === 'Today' || n === 'Yesterday' ? n + ' · ' + C.shortDate(iso) : C.shortDate(iso); }
@@ -194,14 +197,19 @@
       var token = ++listToken;
       api.show('workouts');
       api.setMsg('wo-msg', note || '', 'ok');
-      $('wo-active').hidden = true; $('wo-start').hidden = false;
+      var view = ro();
+      $('wo-active').hidden = true; $('wo-start').hidden = view;
+      $('wo-exlib').hidden = view;                 // exercise pages stay personal
+      $('wo-title').textContent = view ? api.ownerName() + '’s training' : 'Training';
+      $('wo-title').classList.toggle('wo-title-who', view);
       if (api.cover && api.cover()) api.cover().paintHero();
       var spBox = $('wo-split'); spBox.textContent = ''; var ld = el('p', 'muted small', 'Loading your split…'); spBox.appendChild(ld);
       $('wo-list').textContent = '';
       $('wo-empty').hidden = true;
-      $('wo-status').textContent = 'Loading your workouts…'; $('wo-status').hidden = false;
+      $('wo-status').textContent = view ? 'Loading ' + api.ownerName() + '’s workouts…' : 'Loading your workouts…'; $('wo-status').hidden = false;
+      $('wo-empty').textContent = view ? api.ownerName() + ' hasn’t logged any workouts yet.' : 'No workouts yet — they’ll show up here once you’ve done one.';
       api.setMsg('wo-err', ''); $('wo-retry').hidden = true;
-      var uid = me();
+      var uid = owner();
       sb.from('workout_sessions').select('id,session_date,started_at,finished_at,notes,split_day').eq('user_id', uid)
         .order('session_date', { ascending: false }).order('started_at', { ascending: false }).limit(30)
         .then(function (res) {
@@ -237,7 +245,7 @@
       var setsBy = {}; sets.forEach(function (s) { (setsBy[s.workout_exercise_id] = setsBy[s.workout_exercise_id] || []).push(s); });
       var exBy = {}; wex.forEach(function (x) { (exBy[x.session_id] = exBy[x.session_id] || []).push({ tt: x.tracking_type, sets: setsBy[x.id] || [] }); });
       var active = null;
-      rows.forEach(function (r) { if (!r.finished_at && (!active || r.started_at > active.started_at)) active = r; });
+      if (!ro()) rows.forEach(function (r) { if (!r.finished_at && (!active || r.started_at > active.started_at)) active = r; });
       if (active) {
         $('wo-active').hidden = false; $('wo-start').hidden = true;
         var n = (exBy[active.id] || []).length;
@@ -300,6 +308,7 @@
     $('wo-retry').addEventListener('click', function () { open(''); });
 
     function startWorkout() {
+      if (ro()) return;   // never change someone else's workout
       if (busy.start) return;
       if (offline('wo-err')) return;
       busy.start = true;
@@ -359,6 +368,7 @@
 
     /* Called once after logging in: if a workout is still going (started in the last 12 h), go straight back to it. */
     function resumeIfActive() {
+      if (ro()) return Promise.resolve(false);
       var uid = me();
       return sb.from('workout_sessions').select('id,started_at').eq('user_id', uid).is('finished_at', null).order('started_at', { ascending: false }).limit(1)
         .then(function (res) {
@@ -386,8 +396,8 @@
       $('ws-retry').onclick = function () { openSession(id, opts); };
       api.focusQuiet($('ws-title'));
       return Promise.all([
-        sb.from('workout_sessions').select('*').eq('id', id).eq('user_id', me()).single(),
-        sb.from('workout_exercises').select('*').eq('session_id', id).eq('user_id', me()).order('position', { ascending: true }).order('id', { ascending: true }),
+        sb.from('workout_sessions').select('*').eq('id', id).eq('user_id', owner()).single(),
+        sb.from('workout_exercises').select('*').eq('session_id', id).eq('user_id', owner()).order('position', { ascending: true }).order('id', { ascending: true }),
         loadLibrary().catch(function () { return null; }),
         loadCustoms().catch(function () { return null; })
       ]).then(function (r) {
@@ -397,7 +407,7 @@
         var s = r[0].data, wex = r[1].data || [];
         var eids = wex.map(function (x) { return x.id; });
         var setsQ = eids.length ? sb.from('workout_sets').select('*').in('workout_exercise_id', eids).order('set_number', { ascending: true }) : Promise.resolve({ data: [] });
-        return Promise.all([s, wex, setsQ, lastTimes(wex.map(function (x) { return x.exercise_ref; }), id)]);
+        return Promise.all([s, wex, setsQ, ro() ? {} : lastTimes(wex.map(function (x) { return x.exercise_ref; }), id)]);
       }).then(function (r) {
         if (!r || token !== sessToken) return;
         if (r[2].error) throw r[2].error;
@@ -405,7 +415,7 @@
         var setsBy = {}; (r[2].data || []).forEach(function (st) { (setsBy[st.workout_exercise_id] = setsBy[st.workout_exercise_id] || []).push(st); });
         exs = r[1].map(function (x) { return buildEx(x, setsBy[x.id] || [], r[3][x.exercise_ref] || null); });
         renderSession();
-        if (opts.fresh && !exs.length) openPicker();   // just started: go straight to choosing the first exercise
+        if (opts.fresh && !exs.length && !ro()) openPicker();   // just started: go straight to choosing the first exercise
       }).catch(function (e) {
         if (token !== sessToken) return;
         console.warn('Workout load failed:', e && (e.code || e.message));
@@ -455,6 +465,7 @@
       var e = { id: x.id, ref: x.exercise_ref, name: x.exercise_name, group: x.muscle_group || info.g || '', tt: TRACK[x.tracking_type] ? x.tracking_type : 'weight_reps',
         position: x.position, eq: info.eq || '', one: !!info.one, note: info.note || '', last: last, rows: [], msg: '', armed: false,
         tSets: x.target_sets || null, tReps: x.target_reps || '', tRest: x.target_rest || '' };
+      e.saved = saved;
       saved.forEach(function (st) { e.rows.push(rowFromSet(st, u)); });
       if (!session || !session.finished_at) {
         var target = e.tSets || (last ? Math.min(last.length, 10) : 3);
@@ -475,7 +486,11 @@
       var mins = minutesBetween(s.started_at, s.finished_at);
       $('ws-sub').textContent = (s.split_name ? s.split_name + (s.split_day_no ? ' · day ' + s.split_day_no : '') + ' · ' : '') +
         (finished ? C.longDate(s.session_date) + (mins ? ' · ' + mins + ' min' : '') : (s.split_day ? 'In progress · ' : '') + 'started ' + timeOfDay(s.started_at));
-      $('ws-tools').hidden = false;
+      var view = ro();
+      $('ws-tools').hidden = view;
+      $('ws-notes-ro').hidden = !(view && s.notes);
+      $('ws-notes-ro').textContent = view && s.notes ? 'Notes: ' + s.notes : '';
+      if (view) $('ws-sub').textContent = api.ownerName() + ' · ' + $('ws-sub').textContent;
       $('ws-finish').hidden = finished;
       $('ws-notes').value = s.notes || '';
       $('ws-delete').textContent = finished ? 'Delete this workout' : 'Discard this workout';
@@ -483,8 +498,32 @@
       $('ws-back').textContent = '‹ Training';
       var list = $('ws-list'); list.textContent = '';
       if (!exs.length) list.appendChild(el('p', 'muted ws-none', finished ? 'No exercises in this workout.' : 'Add your first exercise to get going.'));
-      exs.forEach(function (e, i) { list.appendChild(exCard(e, i, u)); });
+      exs.forEach(function (e, i) { list.appendChild(view ? roCard(e, u) : exCard(e, i, u)); });
       $('ws-add').textContent = exs.length ? '+ Add another exercise' : '+ Add exercise';
+    }
+
+    /* Someone else's workout: what they did, nothing to tap or type. */
+    function roCard(e, u) {
+      var card = el('div', 'card ws-ex ws-ex-ro'); card.setAttribute('data-ex', String(e.id));
+      var head = el('div', 'ws-ex-head');
+      var ht = el('div', 'ws-ex-titles');
+      ht.appendChild(el('h3', 'ws-ex-name', e.name));
+      var meta = [e.group, e.eq].filter(Boolean);
+      if (e.one) meta.push('one side at a time');
+      ht.appendChild(el('span', 'ws-ex-meta', meta.join(' · ')));
+      head.appendChild(ht); card.appendChild(head);
+      if (e.tSets) card.appendChild(el('p', 'ws-target', 'Target ' + e.tSets + ' × ' + (e.tReps || '—') + (e.tRest ? ' · rest ' + e.tRest : '')));
+      var sets = (e.saved || []).slice().sort(function (a, b) { return a.set_number - b.set_number; });
+      if (!sets.length) { card.appendChild(el('p', 'muted small', 'No sets logged.')); return card; }
+      var ol = el('ol', 'ws-ro-sets');
+      sets.forEach(function (st, i) {
+        var li = el('li');
+        li.appendChild(el('span', 'ws-ro-n', String(i + 1)));
+        li.appendChild(el('span', 'ws-ro-v', setText(st, e.tt, u) + (TRACK[e.tt] && TRACK[e.tt].w && TRACK[e.tt].r ? ' ' + unitHint(e, u) : '')));
+        ol.appendChild(li);
+      });
+      card.appendChild(ol);
+      return card;
     }
 
     function unitHint(e, u) {
@@ -623,6 +662,7 @@
     }
 
     function toggleSet(e, row, i) {
+      if (ro()) return;   // never change someone else's workout
       if (row.busy || !session) return;
       if (offline('ws-err')) { showExMsg(e, "You're offline — this set isn't saved yet. Tap ✓ again when you're back online."); return; }
       if (!row.done) {
@@ -654,6 +694,7 @@
 
     /* Changed the numbers of a set you'd already ticked → save the change. */
     function updateSet(e, row, i) {
+      if (ro()) return;   // never change someone else's workout
       if (row.busy || !row.id) return;
       var chk = readRow(e, row);
       if (!chk.ok) { showExMsg(e, chk.problem + ' (The set keeps its old numbers until you fix this.)'); return; }
@@ -669,6 +710,7 @@
     }
 
     function addSet(e) {
+      if (ro()) return;   // never change someone else's workout
       if (e.rows.length >= MAX_SETS) return;
       e.rows.push(plannedRow(e.rows[e.rows.length - 1] || null, unit()));
       e.msg = '';
@@ -677,6 +719,7 @@
       if (inputs[0]) inputs[0].scrollIntoView({ block: 'nearest' });
     }
     function removeLastSet(e) {
+      if (ro()) return;   // never change someone else's workout
       var row = e.rows[e.rows.length - 1];
       if (!row || row.busy) return;
       if (!row.done) { e.rows.pop(); redrawEx(e); return; }
@@ -693,6 +736,7 @@
 
     var armTimer = null;
     function removeExercise(e) {
+      if (ro()) return;   // never change someone else's workout
       if (busy['rm' + e.id]) return;
       if (!e.armed) {
         exs.forEach(function (x) { x.armed = false; });
@@ -729,6 +773,7 @@
     });
 
     function finish() {
+      if (ro()) return;   // never change someone else's workout
       if (!session || busy.finish) return;
       api.setMsg('ws-err', '');
       var doneCount = 0; exs.forEach(function (e) { e.rows.forEach(function (r) { if (r.done) doneCount++; }); });

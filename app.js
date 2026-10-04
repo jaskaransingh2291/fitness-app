@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.14.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.15.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -717,11 +717,15 @@
   var workouts = (window.TaakatWorkouts && C) ? window.TaakatWorkouts({
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; }, version: APP_VERSION,
-    splits: function () { return splits; }, exinfo: function () { return exinfo; }, cover: function () { return cover; }
+    splits: function () { return splits; }, exinfo: function () { return exinfo; }, cover: function () { return cover; },
+    owner: function () { return viewing ? { id: viewing.id } : me; }, ownerProfile: function () { return viewing ? viewing.profile : profile; },
+    ownerName: function () { return viewing ? viewing.name : null; }, viewOnly: function () { return !!viewing; },
   }) : null;
   var splits = (window.TaakatSplits && workouts) ? window.TaakatSplits({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
-    me: function () { return me; }, current: function () { return currentView; }, version: APP_VERSION, workouts: workouts
+    me: function () { return me; }, current: function () { return currentView; }, version: APP_VERSION, workouts: workouts,
+    owner: function () { return viewing ? { id: viewing.id } : me; }, ownerProfile: function () { return viewing ? viewing.profile : profile; },
+    ownerName: function () { return viewing ? viewing.name : null; }, viewOnly: function () { return !!viewing; },
   }) : null;
   var exinfo = (window.TaakatExInfo && workouts) ? window.TaakatExInfo({
     $: $, sb: sb, show: show, focusQuiet: function (el) { focusQuiet(el); }, current: function () { return currentView; }, friendly: friendly,
@@ -732,7 +736,9 @@
     $: $, C: C, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly, show: show, focusQuiet: function (el) { focusQuiet(el); },
     me: function () { return me; }, profile: function () { return profile; }, current: function () { return currentView; },
     back: function () { showToday(''); },
-    weightChanged: function (kg) { return weightChanged(kg); }
+    weightChanged: function (kg) { return weightChanged(kg); },
+    owner: function () { return viewing ? { id: viewing.id } : me; }, ownerProfile: function () { return viewing ? viewing.profile : profile; },
+    ownerName: function () { return viewing ? viewing.name : null; }, viewOnly: function () { return !!viewing; },
   }) : null;
   /* A new latest weigh-in becomes your weight for targets (decided: automatic). */
   function weightChanged(kg) {
@@ -751,7 +757,9 @@
   }) : null;
   var cover = (window.TaakatCover && C) ? window.TaakatCover({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly,
-    me: function () { return me; }, profile: function () { return profile; }
+    me: function () { return me; }, profile: function () { return profile; },
+    owner: function () { return viewing ? { id: viewing.id } : me; }, ownerProfile: function () { return viewing ? viewing.profile : profile; },
+    ownerName: function () { return viewing ? viewing.name : null; }, viewOnly: function () { return !!viewing; },
   }) : null;
 
   var crew = (window.TaakatCrew && C) ? window.TaakatCrew({
@@ -803,10 +811,7 @@
   });
   var resumeCheckPending = false;
   $('tab-food').addEventListener('click', function () { if (currentView !== 'home') showToday(''); });
-  $('tab-workouts').addEventListener('click', function () {
-    if (viewing) stopViewing(true);            // (crew view of workouts comes in the next stage)
-    if (currentView !== 'workouts' && workouts) workouts.open('');
-  });
+  $('tab-workouts').addEventListener('click', function () { if (currentView !== 'workouts' && workouts) workouts.open(''); });
 
   function fmt(n) { return Number(n).toLocaleString('en-CA'); }
   function numOrNull(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
@@ -1216,8 +1221,9 @@
     else meals.showDay(d);
     updateWho();
     if (v) {
-      // someone else's day: nothing of yours runs here (no reminders, no saving targets, no weigh-in row)
+      // someone else's day: nothing of yours runs here (no reminders, no saving targets) — their weight row is view only
       $('backup-nudge').hidden = true; $('crew-notice').hidden = true;
+      if (body) body.summary();
       return;
     }
     if (resumeCheckPending) { resumeCheckPending = false; workouts.resumeIfActive(); }
@@ -1234,14 +1240,14 @@
   function firstName(n) { return String(n || '').trim().split(/\s+/)[0] || 'Me'; }
   function updateWho() {
     var list = crew ? crew.accepted() : [];
-    var onTab = currentView === 'home';
+    var onTab = currentView === 'home' || currentView === 'workouts';
     var btn = $('who-btn');
     btn.hidden = !onTab || (!list.length && !viewing);
     $('who-name').textContent = viewing ? firstName(viewing.name) : (profile ? firstName(profile.display_name) : 'Me');
     btn.setAttribute('aria-label', 'Showing ' + (viewing ? viewing.name + '’s' : 'your') + ' logs. Change whose logs to show.');
     $('topbar').classList.toggle('has-who', !btn.hidden);
     if (btn.hidden) closeWho();
-    $('view-bar').hidden = !viewing || (currentView !== 'home' && currentView !== 'week');
+    $('view-bar').hidden = !viewing || ['home', 'week', 'workouts', 'session', 'weigh'].indexOf(currentView) === -1;
     if (viewing) $('view-bar-text').textContent = 'Viewing ' + viewing.name + ' · view only';
   }
   function closeWho() { $('who-menu').hidden = true; $('who-btn').setAttribute('aria-expanded', 'false'); }
@@ -1281,7 +1287,7 @@
       document.body.classList.add('viewing');
       closeWho();
       homeDay = null;
-      showToday('');
+      if (currentView === 'workouts') workouts.open(''); else showToday('');
     }).catch(function (e) {
       console.warn('Crew view failed:', e && (e.code || e.message));
       closeWho();
@@ -1295,7 +1301,7 @@
     document.body.classList.remove('viewing');
     applyProfileAccent(profile);
     closeWho();
-    if (!quiet) { homeDay = null; showToday(''); } else updateWho();
+    if (!quiet) { homeDay = null; if (currentView === 'workouts' || currentView === 'session') workouts.open(''); else showToday(''); } else updateWho();
   }
   function stepDay(n) {
     var today = C.localDate();

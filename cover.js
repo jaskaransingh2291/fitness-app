@@ -18,31 +18,37 @@
   /* ====================================================================== */
   function TaakatCover(api) {
     var $ = api.$, sb = api.sb;
-    var cache = { key: null, url: null, uid: null };
+    var cache = {};            // uid → { key, url }: one private blob: URL per person (you + crew you view)
+    function dropCache(uid) { Object.keys(cache).forEach(function (k) { if (!uid || k === uid) { URL.revokeObjectURL(cache[k].url); delete cache[k]; } }); }
     var busy = false, armTimer = null;
 
     function me() { return api.me(); }
+    /* Training shows the cover of whoever's logs are on screen (you, or crew you're viewing). */
+    function who() { return api.owner ? api.owner() : me(); }
+    function whoProfile() { return api.ownerProfile ? api.ownerProfile() : api.profile(); }
     function key() { var p = api.profile(); return p && p.cover_updated_at ? String(p.cover_updated_at) : null; }
+    function keyOf(p) { return p && p.cover_updated_at ? String(p.cover_updated_at) : null; }
 
     /* Load the photo (once per version) as a private blob: URL. → Promise<url|null> */
-    function photoUrl() {
-      var k = key(), user = me();
+    function photoUrl(forWho) {
+      var user = forWho ? who() : me(), k = forWho ? keyOf(whoProfile()) : key();
       if (!k || !user) return Promise.resolve(null);
-      if (cache.key === k && cache.uid === user.id && cache.url) return Promise.resolve(cache.url);
+      var c = cache[user.id];
+      if (c && c.key === k) return Promise.resolve(c.url);
       return sb.storage.from('covers').download(path(user.id), { cacheNonce: k }).then(function (res) {
         if (res.error || !res.data) throw res.error || new Error('no photo');
-        if (key() !== k || !me() || me().id !== user.id) return null;
-        if (cache.url) URL.revokeObjectURL(cache.url);
-        cache = { key: k, uid: user.id, url: URL.createObjectURL(res.data) };
-        return cache.url;
+        if (!me() || (forWho ? (keyOf(whoProfile()) !== k || who().id !== user.id) : (key() !== k || me().id !== user.id))) return null;
+        dropCache(user.id);
+        cache[user.id] = { key: k, url: URL.createObjectURL(res.data) };
+        return cache[user.id].url;
       });
     }
 
     /* Training: paint the photo behind the title (or hide it). */
     function paintHero() {
       var hero = $('wo-hero'), img = $('wo-cover');
-      if (!key()) { hero.hidden = true; img.removeAttribute('src'); return; }
-      photoUrl().then(function (url) {
+      if (!keyOf(whoProfile())) { hero.hidden = true; img.removeAttribute('src'); return; }
+      photoUrl(true).then(function (url) {
         if (!url) { hero.hidden = true; return; }
         img.onload = function () { hero.hidden = false; };
         img.onerror = function () { hero.hidden = true; };
@@ -162,14 +168,13 @@
       }).then(function (r2) {
         if (r2 && r2.error) throw r2.error;
         var p = api.profile(); if (p) p.cover_updated_at = null;
-        if (cache.url) URL.revokeObjectURL(cache.url);
-        cache = { key: null, url: null, uid: null };
+        dropCache(user.id);
       });
     }
 
     return {
       paintHero: paintHero, card: card, removePhoto: removePhoto, has: function () { return !!key(); },
-      clear: function () { if (cache.url) URL.revokeObjectURL(cache.url); cache = { key: null, url: null, uid: null }; busy = false; }
+      clear: function () { dropCache(); busy = false; }
     };
   }
 

@@ -82,6 +82,9 @@
     function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
     function btn(cls, text, onClick, label) { var b = el('button', cls, text); b.type = 'button'; if (label) b.setAttribute('aria-label', label); b.addEventListener('click', onClick); return b; }
     function me() { return api.me().id; }
+    function owner() { return api.owner ? api.owner().id : me(); }
+    function ro() { return !!(api.viewOnly && api.viewOnly()); }
+    var mineFor = null;          // whose splits are in 'mine'
     function offline(msgId) { if (navigator.onLine) return false; api.setMsg(msgId, "You're offline. Connect to the internet and try again — nothing was lost."); return true; }
     function active() { return mine.filter(function (s) { return !!s.activated_at; }).sort(function (a, b) { return a.activated_at < b.activated_at ? 1 : -1; })[0] || null; }
     function copyOf(tplId) { return mine.filter(function (s) { return s.source_id === tplId; })[0] || null; }
@@ -101,21 +104,21 @@
       return tplLoading;
     }
     function loadMine() {
-      var uid = me();
+      var uid = owner();
       return sb.from('user_splits').select('id,name,source_id,days,activated_at,updated_at').eq('user_id', uid)
         .order('activated_at', { ascending: false, nullsFirst: false }).order('id', { ascending: true }).limit(50)
         .then(function (res) {
           if (res.error) throw res.error;
-          if (!api.me() || api.me().id !== uid) return mine;
+          if (!api.me() || owner() !== uid) return mine;
           mine = (res.data || []).map(function (s) { s.days = cleanDays(s.days); return s; });
-          loaded = true;
+          mineFor = uid; loaded = uid === me();
           return mine;
         });
     }
     function loadNext() {
       var a = active();
       if (!a) { nextNo = 1; return Promise.resolve(1); }
-      return sb.from('workout_sessions').select('split_day_no,finished_at').eq('user_id', me()).eq('split_id', a.id)
+      return sb.from('workout_sessions').select('split_day_no,finished_at').eq('user_id', owner()).eq('split_id', a.id)
         .not('finished_at', 'is', null).order('finished_at', { ascending: false }).limit(1)
         .then(function (res) {
           var last = !res.error && res.data && res.data[0] ? res.data[0].split_day_no : null;
@@ -161,6 +164,7 @@
     function drawBlock(hasActiveWorkout) {
       var box = $('wo-split'); box.textContent = '';
       var a = active();
+      if (ro()) { drawBlockView(a); return; }
       if (!a) {
         setStartStyle(false);
         box.appendChild(btn('btn-secondary sp-choose', 'Choose a split', openChoose));
@@ -223,7 +227,33 @@
       box.appendChild(m);
     }
 
+    /* Someone else's split: what they're following and what's next — nothing to start or change. */
+    function drawBlockView(a) {
+      var box = $('wo-split');
+      if (!a) { box.appendChild(el('p', 'muted small sp-hint', api.ownerName() + ' isn’t following a split.')); return; }
+      var d = a.days[nextNo - 1] || a.days[0];
+      var top = el('div', 'sp-top');
+      top.appendChild(el('p', 'sp-label sp-up', 'Next up · Day ' + nextNo + ' of ' + a.days.length));
+      top.appendChild(el('p', 'sp-label sp-follow', a.name));
+      box.appendChild(top);
+      box.appendChild(el('h3', 'sp-day', d.name));
+      box.appendChild(el('p', 'muted small sp-meta', dayCount(d)));
+      if (d.items.length) {
+        var pb = btn('sp-peek', 'What’s in it', function () {}); pb.id = 'sp-peek'; pb.appendChild(chev());
+        var pl = el('ul', 'sp-peek-list'); pl.id = 'sp-peek-list';
+        d.items.forEach(function (it) {
+          var li = el('li');
+          li.appendChild(el('span', 'sp-peek-name', it.name));
+          li.appendChild(el('span', 'sp-peek-t', it.sets + ' × ' + (it.reps || '—')));
+          pl.appendChild(li);
+        });
+        box.appendChild(pb); box.appendChild(pl);
+        disclose(pb, pl, false);
+      }
+    }
+
     function startDay(split, dayNo, button) {
+      if (ro()) return;
       if (busy.start) return;
       if (offline('wo-err')) return;
       busy.start = true;
@@ -246,7 +276,7 @@
       minebox.textContent = ''; tplbox.textContent = '';
       $('sl-mine-wrap').hidden = true;
       tplbox.appendChild(el('li', 'muted small', 'Loading…'));
-      Promise.all([loadTemplates(), loaded ? Promise.resolve(mine) : loadMine()]).then(function () {
+      Promise.all([loadTemplates(), loaded && mineFor === me() ? Promise.resolve(mine) : loadMine()]).then(function () {
         if (api.current() !== 'splits') return;
         drawChoose();
       }).catch(function (e) {

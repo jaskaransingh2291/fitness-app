@@ -46,25 +46,28 @@
   function TaakatBody(api) {
     var $ = api.$, sb = api.sb, C = api.C;
     var list = [];            // your weigh-ins, newest first
-    var loadedFor = null, loading = null, token = 0;
+    var loadedFor = null, loading = null, loadingFor = null, token = 0;
     var busy = {};
 
     function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
     function me() { return api.me().id; }
+    function owner() { return api.owner ? api.owner().id : me(); }      // crew view: whose weigh-ins are shown
+    function ro() { return !!(api.viewOnly && api.viewOnly()); }
     function unit() { var p = api.profile(); return p && p.body_unit === 'lb' ? 'lb' : 'kg'; }
     function fmt(kg, u) { u = u || unit(); return show1(toUnit(kg, u)) + ' ' + u; }
     function offline(id) { if (navigator.onLine) return false; api.setMsg(id, "You're offline. Connect to the internet and try again — nothing was lost."); return true; }
     function newest() { return list[0] || null; }
 
     function load(force) {
-      var uid = me();
+      var uid = owner();
       if (!force && loadedFor === uid) return Promise.resolve(list);
-      if (!force && loading) return loading;
+      if (!force && loading && loadingFor === uid) return loading;
+      loadingFor = uid;
       var t = ++token;
       loading = sb.from('weigh_ins').select('id,log_date,weight_kg').eq('user_id', uid).order('log_date', { ascending: false }).limit(400)
         .then(function (res) {
           if (res.error) throw res.error;
-          if (t === token && api.me() && api.me().id === uid) { list = (res.data || []).map(function (r) { return { id: r.id, log_date: r.log_date, weight_kg: Number(r.weight_kg) }; }); loadedFor = uid; }
+          if (t === token && api.me() && owner() === uid) { list = (res.data || []).map(function (r) { return { id: r.id, log_date: r.log_date, weight_kg: Number(r.weight_kg) }; }); loadedFor = uid; }
           return list;
         }).finally(function () { if (t === token) loading = null; });
       return loading;
@@ -75,7 +78,7 @@
       var sub = $('to-weigh-sub');
       load().then(function () {
         var n = newest(), today = C.localDate();
-        if (!n) { sub.textContent = 'Log your weight to see your trend'; return; }
+        if (!n) { sub.textContent = ro() ? api.ownerName() + ' hasn’t logged a weigh-in yet' : 'Log your weight to see your trend'; return; }
         var ago = daysApart(n.log_date, today);
         sub.textContent = fmt(n.weight_kg) + ' · ' + (ago <= 0 ? 'today' : ago === 1 ? 'yesterday' : ago + ' days ago');
       }).catch(function () { sub.textContent = 'Log your weight and see your trend'; });
@@ -83,6 +86,10 @@
 
     /* ---------- the Weight screen ---------- */
     function open(note) {
+      var view = ro();
+      $('wi-title').textContent = view ? api.ownerName() + '’s weight' : 'Weight';
+      $('wi-form').hidden = view; $('wi-intro').hidden = view;
+      $('wi-empty').textContent = view ? api.ownerName() + ' hasn’t logged a weigh-in yet.' : 'No weigh-ins yet. Your trend shows up here after a few.';
       api.show('weigh');
       api.focusQuiet($('wi-title'));
       api.setMsg('wi-msg', note || '', 'ok');
@@ -96,7 +103,7 @@
       load(true).then(function () {
         if (api.current() !== 'weigh') return;
         $('wi-status').hidden = true;
-        fillForDate();
+        if (!ro()) fillForDate();
         draw();
       }).catch(function (e) {
         console.warn('Weigh-ins load failed:', e && (e.code || e.message));
@@ -116,7 +123,7 @@
 
     function draw() {
       var u = unit(), today = C.localDate();
-      var box = $('wi-chart'), ro = $('wi-readout');
+      var box = $('wi-chart'), readEl = $('wi-readout');
       var wc = weekChange(list, today);
       $('wi-trend').hidden = !list.length;
       $('wi-empty').hidden = !!list.length;
@@ -124,18 +131,18 @@
         $('wi-avg').textContent = wc.now !== null ? fmt(wc.now, u) : fmt(newest().weight_kg, u);
         $('wi-avg-label').textContent = wc.now !== null ? '7-day average' : 'Latest weigh-in';
         var ch = $('wi-change');
-        if (wc.diff === null) ch.textContent = list.length < 3 ? 'Weigh in a few times a week to see a clear trend.' : 'Weigh in this week and next to compare weeks.';
+        if (wc.diff === null) ch.textContent = ro() ? 'Not enough weigh-ins yet to compare weeks.' : (list.length < 3 ? 'Weigh in a few times a week to see a clear trend.' : 'Weigh in this week and next to compare weeks.');
         else if (Math.abs(toUnit(wc.diff, u)) < 0.05) ch.textContent = 'Same as the week before.';
         else ch.textContent = (wc.diff < 0 ? 'Down ' : 'Up ') + show1(Math.abs(toUnit(wc.diff, u))) + ' ' + u + ' vs the week before.';
         var pts = list.map(function (e) { return { x: e.log_date, y: r1(toUnit(e.weight_kg, u)), label: fmt(e.weight_kg, u) }; });
         var avg = avg7(list).map(function (p) { return { x: p.x, y: r1(toUnit(p.y, u)) }; });
         $('wi-legend').hidden = list.length < 2;
         if (root.TaakatChart) root.TaakatChart.line(box, {
-          points: pts, line: list.length > 1 ? avg : null, readout: ro,
+          points: pts, line: list.length > 1 ? avg : null, readout: readEl,
           fmt: function (v) { return show1(v) + (arguments[1] ? '' : ' ' + u); },
           title: 'Your weigh-ins: ' + list.length + ', latest ' + fmt(newest().weight_kg, u) + (wc.now !== null ? ', 7-day average ' + fmt(wc.now, u) : '') + '.'
         });
-      } else { box.textContent = ''; ro.textContent = ''; }
+      } else { box.textContent = ''; readEl.textContent = ''; }
       drawList();
     }
     function drawList() {
@@ -146,6 +153,7 @@
         t.appendChild(el('span', 'entry-name', fmt(e.weight_kg)));
         t.appendChild(el('span', 'entry-meta', C.dayName(e.log_date, C.localDate()) === 'Today' ? 'Today · ' + C.shortDate(e.log_date) : C.longDate(e.log_date)));
         li.appendChild(t);
+        if (ro()) { ul.appendChild(li); return; }
         var del = el('button', 'btn-link danger-link wi-del', 'Delete'); del.type = 'button';
         del.setAttribute('aria-label', 'Delete weigh-in of ' + C.longDate(e.log_date));
         del.addEventListener('click', function () { removeEntry(e, del); });
@@ -176,6 +184,7 @@
 
     $('wi-form').addEventListener('submit', function (ev) {
       ev.preventDefault();
+      if (ro()) return;
       if (busy.save) return;
       var d = $('wi-date').value, today = C.localDate();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today || d < '2020-01-01') { api.setMsg('wi-msg', 'Pick a date from 2020 up to today.'); return; }
@@ -213,6 +222,7 @@
 
     var delTimer = null;
     function removeEntry(e, b) {
+      if (ro()) return;
       if (busy.del) return;
       if (b.dataset.armed !== '1') {
         Array.prototype.forEach.call(document.querySelectorAll('.wi-del'), function (x) { x.dataset.armed = ''; x.textContent = 'Delete'; });

@@ -19,20 +19,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.14.0">
-<script src="vendor/supabase.js?v=3.14.0" defer></script>
-<script src="config.js?v=3.14.0" defer></script>
-<script src="calc.js?v=3.14.0" defer></script>
-<script src="meals.js?v=3.14.0" defer></script>
-<script src="workouts.js?v=3.14.0" defer></script>
-<script src="splits.js?v=3.14.0" defer></script>
-<script src="chart.js?v=3.14.0" defer></script>
-<script src="exinfo.js?v=3.14.0" defer></script>
-<script src="body.js?v=3.14.0" defer></script>
-<script src="data.js?v=3.14.0" defer></script>
-<script src="cover.js?v=3.14.0" defer></script>
-<script src="crew.js?v=3.14.0" defer></script>
-<script src="app.js?v=3.14.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.15.0">
+<script src="vendor/supabase.js?v=3.15.0" defer></script>
+<script src="config.js?v=3.15.0" defer></script>
+<script src="calc.js?v=3.15.0" defer></script>
+<script src="meals.js?v=3.15.0" defer></script>
+<script src="workouts.js?v=3.15.0" defer></script>
+<script src="splits.js?v=3.15.0" defer></script>
+<script src="chart.js?v=3.15.0" defer></script>
+<script src="exinfo.js?v=3.15.0" defer></script>
+<script src="body.js?v=3.15.0" defer></script>
+<script src="data.js?v=3.15.0" defer></script>
+<script src="cover.js?v=3.15.0" defer></script>
+<script src="crew.js?v=3.15.0" defer></script>
+<script src="app.js?v=3.15.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -477,6 +477,7 @@
       <p id="ws-msg" class="msg" role="status" hidden></p>
     </div>
     <div id="ws-list" class="ws-list" aria-live="polite"></div>
+    <p class="ws-notes-ro" id="ws-notes-ro" hidden></p>
     <p id="ws-err" class="msg" role="alert" hidden></p>
     <button type="button" class="btn-secondary" id="ws-retry" hidden>Try again</button>
     <div id="ws-tools" hidden>
@@ -654,7 +655,7 @@
       <button type="button" class="btn-link back-link" id="wi-back">&#8249; Today</button>
     </div>
     <h2 id="wi-title" class="card-title" tabindex="-1">Weight</h2>
-    <p class="muted small wi-intro">Your latest weigh-in also updates the weight used for your calorie and protein targets. Weigh yourself at the same time of day, e.g. in the morning before eating.</p>
+    <p class="muted small wi-intro" id="wi-intro">Your latest weigh-in also updates the weight used for your calorie and protein targets. Weigh yourself at the same time of day, e.g. in the morning before eating.</p>
     <form id="wi-form" class="wi-form" novalidate>
       <div class="wi-entry">
         <div class="wi-field">
