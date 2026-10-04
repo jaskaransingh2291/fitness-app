@@ -726,3 +726,16 @@ input.se-day-name { height: 48px; font-family: var(--font-head); font-size: 20px
 #da-backup { margin-top: 14px; }
 #da-form { margin-top: 22px; }
 .btn-danger { background: var(--bad); color: #121211; }
+
+/* ===================== Crew ===================== */
+.crew-list { margin-top: 10px; }
+.crew-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.crew-row { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.crew-name { margin: 0; font-family: var(--font-head); font-size: 22px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
+.crew-in .crew-name::before { content: "NEW · "; color: var(--a); }
+.crew-what { margin: 2px 0 0; }
+.crew-btns { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
+.crew-btns .btn-primary { width: auto; padding: 0 22px; height: 48px; margin-top: 0; }
+.crew-btns .btn-link { padding: 0; }
+.crew-none { margin: 0; }
+.crew-form { margin-top: 14px; }

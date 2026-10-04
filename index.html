@@ -19,19 +19,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.12.0">
-<script src="vendor/supabase.js?v=3.12.0" defer></script>
-<script src="config.js?v=3.12.0" defer></script>
-<script src="calc.js?v=3.12.0" defer></script>
-<script src="meals.js?v=3.12.0" defer></script>
-<script src="workouts.js?v=3.12.0" defer></script>
-<script src="splits.js?v=3.12.0" defer></script>
-<script src="chart.js?v=3.12.0" defer></script>
-<script src="exinfo.js?v=3.12.0" defer></script>
-<script src="body.js?v=3.12.0" defer></script>
-<script src="data.js?v=3.12.0" defer></script>
-<script src="cover.js?v=3.12.0" defer></script>
-<script src="app.js?v=3.12.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.13.0">
+<script src="vendor/supabase.js?v=3.13.0" defer></script>
+<script src="config.js?v=3.13.0" defer></script>
+<script src="calc.js?v=3.13.0" defer></script>
+<script src="meals.js?v=3.13.0" defer></script>
+<script src="workouts.js?v=3.13.0" defer></script>
+<script src="splits.js?v=3.13.0" defer></script>
+<script src="chart.js?v=3.13.0" defer></script>
+<script src="exinfo.js?v=3.13.0" defer></script>
+<script src="body.js?v=3.13.0" defer></script>
+<script src="data.js?v=3.13.0" defer></script>
+<script src="cover.js?v=3.13.0" defer></script>
+<script src="crew.js?v=3.13.0" defer></script>
+<script src="app.js?v=3.13.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -278,6 +279,11 @@
     <p id="day-msg" class="msg" role="alert" hidden></p>
     <button type="button" class="btn-secondary" id="day-retry" hidden>Try again</button>
 
+    <div class="backup-nudge crew-notice" id="crew-notice" role="region" aria-labelledby="crew-notice-h" hidden>
+      <p class="backup-nudge-h" id="crew-notice-h">Crew invite</p>
+      <p class="small" id="crew-notice-text"></p>
+      <div class="backup-nudge-btns"><button type="button" class="btn-secondary" id="crew-notice-go">See the invite</button></div>
+    </div>
     <div class="backup-nudge" id="backup-nudge" role="region" aria-labelledby="backup-nudge-h" hidden>
       <p class="backup-nudge-h" id="backup-nudge-h">Back up your logs</p>
       <p class="small" id="backup-nudge-text"></p>
@@ -768,6 +774,18 @@
       </fieldset>
       <p class="muted small">Sets you already logged keep their numbers — they&rsquo;re just shown in the unit you pick.</p>
       <p id="unit-msg" class="msg" role="status" hidden></p>
+    </div>
+
+    <div class="card" id="crew-card">
+      <h2 class="card-title">Crew</h2>
+      <p class="muted small">Share your logs with someone you trust. Once they accept, you both see each other&rsquo;s food, workouts, weigh-ins and cover photo &mdash; view only, nobody can change the other&rsquo;s logs. Either of you can stop sharing any time.</p>
+      <div id="crew-list" class="crew-list"></div>
+      <form id="crew-form" class="crew-form" novalidate>
+        <label for="crew-email">Invite by email</label>
+        <input id="crew-email" type="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="the email they log in with">
+        <button type="submit" class="btn-secondary" id="crew-send">Send invite</button>
+      </form>
+      <p id="crew-msg" class="msg" role="status" hidden></p>
     </div>
 
     <div class="card" id="cv-card">

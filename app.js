@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.12.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.13.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -681,6 +681,7 @@
       if (body) body.clear();
       if (data) data.clear();
       if (cover) cover.clear();
+      if (crew) crew.clear();
       resumeCheckPending = false;
       showLogin(note || '', kind);
       $('login-email').value = '';
@@ -744,6 +745,12 @@
   var cover = (window.TaakatCover && C) ? window.TaakatCover({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly,
     me: function () { return me; }, profile: function () { return profile; }
+  }) : null;
+
+  var crew = (window.TaakatCrew && C) ? window.TaakatCrew({
+    $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly,
+    me: function () { return me; }, current: function () { return currentView; },
+    openProfileCrew: function () { openProfile(); var c = $('crew-card'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); }
   }) : null;
 
   /* Delete account: removes the cover photo (Supabase only allows that through its photo service), then
@@ -1188,6 +1195,7 @@
     if (resumeCheckPending) { resumeCheckPending = false; workouts.resumeIfActive(); }
     if (body) body.summary();
     if (data) data.nudge();
+    if (crew) crew.refreshToday();
     if (targetsSavedFor !== C.localDate()) {
       saveTodayTargets(profile).catch(function (e) { console.warn('Could not save today’s target yet:', e && (e.code || e.message)); });
     }
@@ -1231,6 +1239,7 @@
     resetPwCard('');
     if (data) data.reset();
     if (cover) cover.card();
+    if (crew) crew.card();
     show('profile');
     focusQuiet($('profile-title'));
   }
