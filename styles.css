@@ -771,3 +771,8 @@ body.viewing.tabs-on .view.home { padding-bottom: calc(24px + var(--tabbar-h)); 
 .ws-notes-ro { margin: 0; padding-top: 12px; border-top: 2px solid var(--text); color: var(--muted-2); overflow-wrap: anywhere; }
 .sp-follow { text-align: right; color: var(--text); overflow-wrap: anywhere; }
 #wo-title.wo-title-who { font-size: clamp(32px, 10vw, 46px); overflow-wrap: break-word; word-break: normal; hyphens: none; }
+
+/* ===================== Sign up (invite code) ===================== */
+.signup-cta { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.signup-cta .muted { margin: 0; }
+#su-code { text-transform: uppercase; letter-spacing: .06em; }

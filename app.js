@@ -3,7 +3,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.15.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '3.16.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
   var ACCENTS = [
@@ -42,13 +42,13 @@
   }
   var launchAccent = null;
 
-  var VIEWS = ['loading', 'login', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
+  var VIEWS = ['loading', 'login', 'signup', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
   var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
   var TAB_VIEWS = ['home', 'workouts'];
   var currentView = null;
   function show(name, focusId) {
     VIEWS.forEach(function (v) { var el = $('view-' + v); if (el) el.hidden = (v !== name); });
-    $('invite-note').hidden = !(name === 'login' || name === 'forgot');
+    $('invite-note').hidden = !(name === 'login' || name === 'forgot' || name === 'signup');
     var inApp = APP_VIEWS.indexOf(name) !== -1;
     document.body.classList.toggle('app-mode', inApp);
     $('topbar').hidden = !inApp;
@@ -477,6 +477,56 @@
       loginBusy = false;
       setBusy(btn, false);
     });
+  });
+
+  /* ---------- create an account (needs an invite code; the database checks it — stage 9) ---------- */
+  function cleanCode(v) { return String(v || '').toUpperCase().replace(/\s+/g, ''); }
+  $('to-signup').addEventListener('click', function () {
+    $('su-email').value = cleanEmail($('login-email').value).toLowerCase();
+    $('su-password').value = ''; $('su-code').value = '';
+    setMsg('signup-msg', '');
+    show('signup');
+    focusQuiet($('signup-title'));
+  });
+  $('su-to-login').addEventListener('click', function () { setMsg('login-msg', ''); show('login'); });
+  var signupBusy = false;
+  function signupError(e) {
+    var code = (e && (e.code || e.error_code)) || '', text = String((e && (e.message || e.msg)) || ''), status = (e && e.status) || 0;
+    if (/database error saving new user/i.test(text) || (status === 500 && code === 'unexpected_failure')) return 'That invite code didn’t work. Check it with the person who gave it to you (letters and numbers only, like TAAKAT-AB12C).';
+    if (code === 'user_already_exists' || code === 'email_exists' || /already (been )?registered|already exists/i.test(text)) return 'There’s already an account with this email. Log in instead — or use “Forgot password?” on the log in screen.';
+    if (code === 'signup_disabled' || /signups? not allowed|signups? (are )?disabled/i.test(text)) return 'New accounts are switched off right now. Ask the person who invited you to switch sign-ups on.';
+    if (code === 'email_address_invalid' || /email address .* invalid|invalid email/i.test(text)) return 'That email address doesn’t look right. Check it and try again.';
+    return friendly(e);
+  }
+  $('signup-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (signupBusy) return;
+    var emailEl = $('su-email'), passEl = $('su-password'), codeEl = $('su-code'), btn = $('signup-btn');
+    var email = cleanEmail(emailEl.value).toLowerCase(), password = passEl.value, code = cleanCode(codeEl.value);
+    emailEl.value = email; codeEl.value = code;
+    [emailEl, passEl, codeEl].forEach(function (x) { markInvalid(x, false); });
+    if (!email || !looksLikeEmail(email)) { markInvalid(emailEl, true); setMsg('signup-msg', 'Enter your email address.'); emailEl.focus(); return; }
+    if (password.length < 8) { markInvalid(passEl, true); setMsg('signup-msg', 'Choose a password of at least 8 characters.'); passEl.focus(); return; }
+    if (byteLength(password) > 72) { markInvalid(passEl, true); setMsg('signup-msg', 'That password is too long.'); passEl.focus(); return; }
+    if (!/^[A-Z0-9-]{6,40}$/.test(code)) { markInvalid(codeEl, true); setMsg('signup-msg', 'Enter the invite code you were given (like TAAKAT-AB12C).'); codeEl.focus(); return; }
+    if (!navigator.onLine) { setMsg('signup-msg', "You're offline. Connect to the internet and try again."); return; }
+    signupBusy = true;
+    setMsg('signup-msg', '');
+    setBusy(btn, true, 'Creating your account…');
+    sb.auth.signUp({ email: email, password: password, options: { data: { invite_code: code } } }).then(function (res) {
+      if (res.error) throw res.error;
+      // A login that already exists comes back as a "user" with no identities (Supabase hides that it exists).
+      var u = res.data && res.data.user;
+      if (u && Array.isArray(u.identities) && u.identities.length === 0) throw { code: 'user_already_exists' };
+      passEl.value = ''; codeEl.value = '';
+      if (res.data && res.data.session) { showHome(res.data.session); return; }
+      setMsg('signup-msg', 'Account created. Check your email for a link to confirm it, then log in.', 'ok');
+    }).catch(function (e) {
+      console.warn('Sign-up failed:', e && (e.code || e.message));
+      var m = signupError(e);
+      setMsg('signup-msg', m);
+      if (/invite code/.test(m)) { markInvalid(codeEl, true); codeEl.focus(); }
+    }).finally(function () { signupBusy = false; setBusy(btn, false); });
   });
 
   /* ---------- forgot password ---------- */

@@ -19,20 +19,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.15.0">
-<script src="vendor/supabase.js?v=3.15.0" defer></script>
-<script src="config.js?v=3.15.0" defer></script>
-<script src="calc.js?v=3.15.0" defer></script>
-<script src="meals.js?v=3.15.0" defer></script>
-<script src="workouts.js?v=3.15.0" defer></script>
-<script src="splits.js?v=3.15.0" defer></script>
-<script src="chart.js?v=3.15.0" defer></script>
-<script src="exinfo.js?v=3.15.0" defer></script>
-<script src="body.js?v=3.15.0" defer></script>
-<script src="data.js?v=3.15.0" defer></script>
-<script src="cover.js?v=3.15.0" defer></script>
-<script src="crew.js?v=3.15.0" defer></script>
-<script src="app.js?v=3.15.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=3.16.0">
+<script src="vendor/supabase.js?v=3.16.0" defer></script>
+<script src="config.js?v=3.16.0" defer></script>
+<script src="calc.js?v=3.16.0" defer></script>
+<script src="meals.js?v=3.16.0" defer></script>
+<script src="workouts.js?v=3.16.0" defer></script>
+<script src="splits.js?v=3.16.0" defer></script>
+<script src="chart.js?v=3.16.0" defer></script>
+<script src="exinfo.js?v=3.16.0" defer></script>
+<script src="body.js?v=3.16.0" defer></script>
+<script src="data.js?v=3.16.0" defer></script>
+<script src="cover.js?v=3.16.0" defer></script>
+<script src="crew.js?v=3.16.0" defer></script>
+<script src="app.js?v=3.16.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -90,6 +90,30 @@
       <p id="login-msg" class="msg" role="alert" hidden></p>
       <button type="submit" class="btn-primary fast-tap" id="login-btn">Log in</button>
       <button type="button" class="btn-link" id="to-forgot">Forgot password?</button>
+    </form>
+    <div class="signup-cta">
+      <p class="muted small">New here? You&rsquo;ll need an invite code from someone who uses Taakat.</p>
+      <button type="button" class="btn-secondary" id="to-signup">Create an account</button>
+    </div>
+  </section>
+
+  <!-- CREATE AN ACCOUNT (needs an invite code) -->
+  <section id="view-signup" class="card view" hidden aria-labelledby="signup-title">
+    <h2 id="signup-title" class="card-title" tabindex="-1">Create an account</h2>
+    <p class="muted">Use your own email &mdash; it&rsquo;s how you log in and reset your password later.</p>
+    <form id="signup-form" novalidate>
+      <label for="su-email">Email</label>
+      <input id="su-email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="254" required>
+      <label for="su-password">Password (at least 8 characters)</label>
+      <div class="pw-wrap">
+        <input id="su-password" name="new-password" type="password" autocomplete="new-password" maxlength="72" required>
+        <button type="button" class="pw-toggle" data-target="su-password" aria-controls="su-password" aria-pressed="false">Show</button>
+      </div>
+      <label for="su-code">Invite code</label>
+      <input id="su-code" name="invite-code" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="40" placeholder="e.g. TAAKAT-AB12C">
+      <p id="signup-msg" class="msg" role="alert" hidden></p>
+      <button type="submit" class="btn-primary fast-tap" id="signup-btn">Create account</button>
+      <button type="button" class="btn-link" id="su-to-login">I already have an account</button>
     </form>
   </section>
 
@@ -863,7 +887,7 @@
     <button type="button" class="btn-primary" id="reload-btn">Try again</button>
   </section>
 
-  <p class="foot" id="invite-note" hidden>Accounts are invite-only</p>
+  <p class="foot" id="invite-note" hidden>Private app &middot; new accounts need an invite code</p>
 </main>
 
 <nav class="tabbar" id="tabbar" aria-label="Sections" hidden>
