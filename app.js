@@ -3,23 +3,10 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var APP_VERSION = '3.16.0';          // must match version.json (checked by the tests)
+  var APP_VERSION = '4.5.0';          // must match version.json (checked by the tests)
   var REQUEST_TIMEOUT_MS = 15000;
   var RESET_COOLDOWN_S = 60;
-  var ACCENTS = [
-    { key: 'orange', name: 'Signal Orange', hex: '#FF6A1F', rgb: '255, 106, 31' },
-    { key: 'lime',   name: 'Volt Lime',     hex: '#C8F54A', rgb: '200, 245, 74' },
-    { key: 'blue',   name: 'Electric Blue', hex: '#6B97FF', rgb: '107, 151, 255' },
-    { key: 'violet', name: 'Ultra Violet',  hex: '#B39BFF', rgb: '179, 155, 255' },
-    { key: 'cyan',   name: 'Ice Cyan',      hex: '#3FDDF5', rgb: '63, 221, 245' },
-    { key: 'pink',   name: 'Hot Pink',      hex: '#FF7AC6', rgb: '255, 122, 198' },
-    { key: 'red',    name: 'Power Red',     hex: '#FF5A5F', rgb: '255, 90, 95' }
-  ];
-  function setAccent(c) {
-    document.documentElement.style.setProperty('--a', c.hex);
-    document.documentElement.style.setProperty('--a-rgb', c.rgb);
-  }
-  function accentByKey(key) { return ACCENTS.filter(function (c) { return c.key === key; })[0] || null; }
+  // Nightglow (4.0): one look for everyone, mint accent set in styles.css. Colour picker removed (Jas, Oct 7).
 
   /* ---------- small safe helpers ---------- */
   function store(key, value) {
@@ -30,17 +17,6 @@
     return null;
   }
 
-  function pickAccent() {
-    // "Surprise me": a new colour every launch, never the same twice in a row.
-    var last = store('taakat.lastAccent');
-    var choices = ACCENTS.filter(function (c) { return c.hex !== last; });
-    var c = choices[Math.floor(Math.random() * choices.length)] || ACCENTS[3];
-    store('taakat.lastAccent', c.hex);
-    launchAccent = c;          // used after login by people who chose "Surprise me"
-    setAccent(ACCENTS[0]);     // logged-out screens use the Taakat orange
-
-  }
-  var launchAccent = null;
 
   var VIEWS = ['loading', 'login', 'signup', 'forgot', 'continue', 'reset', 'home', 'fatal', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
   var APP_VIEWS = ['home', 'profile-error', 'setup', 'numbers', 'profile', 'addfood', 'portion', 'custom', 'week', 'workouts', 'session', 'expick', 'exnew', 'wdone', 'splits', 'splitview', 'splitedit', 'exinfo', 'weigh', 'delacct'];
@@ -56,6 +32,7 @@
     $('tabbar').hidden = !tabs;
     $('to-profile').hidden = !tabs;
     document.body.classList.toggle('tabs-on', tabs);
+    document.body.classList.toggle('fab-on', name === 'home');   // round + (Log food) sits next to the tab bar on Today
     if (tabs) {
       $('tab-food').setAttribute('aria-current', name === 'home' ? 'page' : 'false');
       $('tab-workouts').setAttribute('aria-current', name === 'workouts' ? 'page' : 'false');
@@ -330,7 +307,6 @@
   }
 
   /* ---------- start ---------- */
-  pickAccent();
 
   function fatal(text) {
     if (text) $('fatal-text').textContent = text;
@@ -746,7 +722,7 @@
   var profile = null;       // their saved profile
   var pendingHomeNote = '';
   var loadToken = 0;
-  var STEPS = ['name', 'sex', 'age', 'height', 'weight', 'activity', 'goal', 'bodyfat', 'colour'];
+  var STEPS = ['name', 'sex', 'age', 'height', 'weight', 'activity', 'goal', 'bodyfat'];
   var stepIndex = 0;
   var answers = {};
   var targetsSavedFor = '';
@@ -807,6 +783,7 @@
   }) : null;
   var cover = (window.TaakatCover && C) ? window.TaakatCover({
     $: $, sb: sb, setMsg: setMsg, setBusy: setBusy, friendly: friendly,
+    focusQuiet: function (el) { focusQuiet(el); }, current: function () { return currentView; },
     me: function () { return me; }, profile: function () { return profile; },
     owner: function () { return viewing ? { id: viewing.id } : me; }, ownerProfile: function () { return viewing ? viewing.profile : profile; },
     ownerName: function () { return viewing ? viewing.name : null; }, viewOnly: function () { return !!viewing; },
@@ -886,11 +863,6 @@
       C.ACTIVITY[p.activity_level] && (p.goal in C.GOAL_ADJUST));
   }
 
-  function applyProfileAccent(p) {
-    var fav = p && accentByKey(p.accent_color);
-    if (p && p.surprise_colors === false && fav) setAccent(fav);
-    else if (launchAccent) setAccent(launchAccent);
-  }
 
   function enterApp(session, note) {
     if (!session || !session.user) { showLogin(''); return; }
@@ -919,7 +891,6 @@
       if (res.error) throw res.error;
       profile = normalise(res.data);
       if (isComplete(profile)) {
-        applyProfileAccent(profile);
         showToday(pendingHomeNote);
         pendingHomeNote = '';
       } else {
@@ -936,25 +907,6 @@
   }
   $('perr-retry').addEventListener('click', function () { if (me) loadProfile(); });
 
-  /* ---------- colour swatches (setup + profile) ---------- */
-  function renderSwatches(containerId, groupName, selectedKey) {
-    var box = $(containerId);
-    box.textContent = '';
-    ACCENTS.forEach(function (c) {
-      var label = document.createElement('label');
-      label.className = 'swatch';
-      var input = document.createElement('input');
-      input.type = 'radio'; input.name = groupName; input.value = c.key;
-      input.checked = (c.key === selectedKey);
-      var span = document.createElement('span');
-      span.textContent = c.name;
-      span.style.setProperty('--sw', c.hex);
-      span.style.setProperty('--sw-glow', 'rgba(' + c.rgb + ', .55)');
-      label.appendChild(input); label.appendChild(span);
-      box.appendChild(label);
-    });
-  }
-
   /* ---------- first-time setup ---------- */
   function draftKey() { return 'taakat.setupDraft.' + me.id; }
   function saveDraft() { store(draftKey(), JSON.stringify({ step: stepIndex, answers: answers })); }
@@ -966,7 +918,7 @@
   }
 
   function startSetup() {
-    answers = { surprise: false, colour: 'orange' };
+    answers = {};
     stepIndex = 0;
     if (profile) {   // a half-finished profile: keep what's there
       answers.name = profile.display_name || '';
@@ -979,8 +931,6 @@
       answers.neck = profile.neck_cm != null ? String(profile.neck_cm) : '';
       answers.waist = profile.waist_cm != null ? String(profile.waist_cm) : '';
       answers.hip = profile.hip_cm != null ? String(profile.hip_cm) : '';
-      answers.colour = profile.accent_color || null;
-      answers.surprise = profile.surprise_colors !== false;
     }
     var d = loadDraft();
     if (d && d.answers && typeof d.answers === 'object') {
@@ -997,8 +947,6 @@
     $('s-neck').value = answers.neck || '';
     $('s-waist').value = answers.waist || '';
     $('s-hip').value = answers.hip || '';
-    renderSwatches('s-swatches', 's-colour', answers.colour);
-    $('s-surprise').checked = answers.surprise !== false;
     updateSetupHints();
     setMsg('setup-msg', '');
     show('setup');
@@ -1016,8 +964,6 @@
     answers.neck = $('s-neck').value;
     answers.waist = $('s-waist').value;
     answers.hip = $('s-hip').value;
-    answers.colour = radioValue('s-colour') || null;
-    answers.surprise = $('s-surprise').checked;
   }
 
   function updateSetupHints() {
@@ -1061,8 +1007,6 @@
         var bf = bodyFatFrom(a.sex, C.parseNumber(a.height), a.neck, a.waist, a.hip);
         if (bf.none) return '';
         return bf.value !== null ? '' : 'Those measurements don’t add up. Check them, or tap Skip.';
-      case 'colour':
-        return (a.surprise || accentByKey(a.colour)) ? '' : 'Pick a colour, or turn on Surprise me.';
     }
     return '';
   }
@@ -1096,12 +1040,6 @@
     if (ev.target && ev.target.type === 'text') setMsg('setup-msg', '');   // typing = fixing it
   });
   $('setup-form').addEventListener('change', function (ev) {
-    if (ev.target && ev.target.name === 's-colour') {
-      // Picking a favourite means "use this colour", so Surprise me turns off.
-      $('s-surprise').checked = false;
-      var c = accentByKey(ev.target.value); if (c) setAccent(c);
-    }
-    if (ev.target && ev.target.id === 's-surprise' && ev.target.checked && launchAccent) setAccent(launchAccent);
     readSetupInputs(); saveDraft(); updateSetupHints();
     // Only clear the message when an answer is picked. A text box losing focus (tapping Next)
     // must NOT clear it, or the button jumps mid-tap and the tap is missed.
@@ -1114,7 +1052,8 @@
   $('setup-skip').addEventListener('click', function () {
     $('s-neck').value = ''; $('s-waist').value = ''; $('s-hip').value = '';
     readSetupInputs(); setMsg('setup-msg', '');
-    showStep(stepIndex + 1, true); saveDraft();
+    if (stepIndex < STEPS.length - 1) { showStep(stepIndex + 1, true); saveDraft(); return; }
+    finishSetup();   // body fat is the last question: Skip = save without it
   });
 
   var setupBusy = false;
@@ -1133,12 +1072,16 @@
     }
     setMsg('setup-msg', '');
     if (stepIndex < STEPS.length - 1) { showStep(stepIndex + 1, true); saveDraft(); return; }
+    finishSetup();
+  });
+  function finishSetup() {
+    if (setupBusy) return;
     // Last step: double-check EVERY step before saving (a draft could have been edited elsewhere).
     for (var i = 0; i < STEPS.length; i++) {
       if (checkStep(STEPS[i], answers)) { showStep(i, true); setMsg('setup-msg', checkStep(STEPS[i], answers)); return; }
     }
     saveSetup();
-  });
+  }
 
   function rowFromAnswers(a) {
     var sex = a.sex;
@@ -1155,9 +1098,7 @@
       goal: a.goal,
       neck_cm: keepBf ? bf.neck : null,
       waist_cm: keepBf ? bf.waist : null,
-      hip_cm: keepBf && sex === 'female' ? bf.hip : null,
-      accent_color: accentByKey(a.colour) ? a.colour : null,
-      surprise_colors: a.surprise !== false
+      hip_cm: keepBf && sex === 'female' ? bf.hip : null
     };
   }
 
@@ -1184,7 +1125,6 @@
       if (res.error) throw res.error;
       profile = normalise(row);
       try { window.localStorage.removeItem(draftKey()); } catch (e) { /* ignore */ }
-      applyProfileAccent(profile);
       // Today's target is a nice-to-have here: if it fails, Today retries it.
       return saveTodayTargets(profile).catch(function (e) { console.warn('Targets save will retry:', e && (e.code || e.message)); });
     }).then(function () {
@@ -1332,8 +1272,6 @@
       if (!res.data) throw Object.assign(new Error('not shared'), { taakat: x.name + ' isn’t sharing with you any more.' });
       if (t !== viewToken || !me) return;
       viewing = { id: x.otherId, name: x.name, profile: normalise(res.data) };
-      var fav = accentByKey(viewing.profile.accent_color) || ACCENTS[0];
-      setAccent(fav);                 // their colour, so it's obvious whose logs these are
       document.body.classList.add('viewing');
       closeWho();
       homeDay = null;
@@ -1349,7 +1287,6 @@
     if (!viewing) return;
     viewing = null; viewToken++;
     document.body.classList.remove('viewing');
-    applyProfileAccent(profile);
     closeWho();
     if (!quiet) { homeDay = null; if (currentView === 'workouts' || currentView === 'session') workouts.open(''); else showToday(''); } else updateWho();
   }
@@ -1384,10 +1321,8 @@
     $('p-waist').value = p.waist_cm != null ? p.waist_cm : '';
     $('p-hip').value = p.hip_cm != null ? p.hip_cm : '';
     updateProfileHip();
-    renderSwatches('p-swatches', 'p-colour', p.surprise_colors === false ? p.accent_color : p.accent_color);
-    $('p-surprise').checked = p.surprise_colors !== false;
     setRadio('p-unit', p.weight_unit === 'kg' ? 'kg' : 'lb');
-    ['profile-msg', 'colour-msg', 'unit-msg'].forEach(function (id) { setMsg(id, ''); });
+    ['profile-msg', 'unit-msg'].forEach(function (id) { setMsg(id, ''); });
     resetPwCard('');
     if (data) data.reset();
     if (cover) cover.card();
@@ -1403,8 +1338,7 @@
     if (profileBusy) return;
     var a = {
       name: $('p-name').value, sex: radioValue('p-sex'), age: $('p-age').value, height: $('p-height').value, weight: $('p-weight').value,
-      activity: $('p-activity').value, goal: radioValue('p-goal'), neck: $('p-neck').value, waist: $('p-waist').value, hip: $('p-hip').value,
-      colour: profile.accent_color, surprise: profile.surprise_colors
+      activity: $('p-activity').value, goal: radioValue('p-goal'), neck: $('p-neck').value, waist: $('p-waist').value, hip: $('p-hip').value
     };
     var fields = { name: 'p-name', age: 'p-age', height: 'p-height', weight: 'p-weight', bodyfat: 'p-neck' };
     Array.prototype.forEach.call(document.querySelectorAll('#profile-form [aria-invalid]'), function (el) { el.removeAttribute('aria-invalid'); });
@@ -1440,51 +1374,6 @@
       profileBusy = false;
       setBusy(btn, false);
     });
-  });
-
-  /* App colour: saves straight away */
-  var colourBusy = false;
-  function saveColour(accentKey, surprise) {
-    if (colourBusy) return;
-    var before = { accent_color: profile.accent_color, surprise_colors: profile.surprise_colors };
-    var change = { accent_color: accentByKey(accentKey) ? accentKey : null, surprise_colors: surprise };
-    colourBusy = true;
-    Array.prototype.forEach.call(document.querySelectorAll('#p-swatches input, #p-surprise'), function (el) { el.disabled = true; });
-    setMsg('colour-msg', '');
-    sb.from('profiles').update(change).eq('id', me.id).then(function (res) {
-      if (res.error) throw res.error;
-      profile.accent_color = change.accent_color;
-      profile.surprise_colors = change.surprise_colors;
-      setMsg('colour-msg', surprise ? 'Saved. You’ll get a new colour each time you open Taakat.' : 'Saved.', 'ok');
-    }).catch(function (e) {
-      console.warn('Colour save failed:', e && (e.code || e.message));
-      profile.accent_color = before.accent_color; profile.surprise_colors = before.surprise_colors;
-      renderSwatches('p-swatches', 'p-colour', before.accent_color);
-      $('p-surprise').checked = before.surprise_colors !== false;
-      applyProfileAccent(profile);
-      setMsg('colour-msg', friendly(e));
-    }).finally(function () {
-      colourBusy = false;
-      Array.prototype.forEach.call(document.querySelectorAll('#p-swatches input, #p-surprise'), function (el) { el.disabled = false; });
-    });
-  }
-  $('p-swatches').addEventListener('change', function (ev) {
-    var c = accentByKey(ev.target.value); if (!c) return;
-    setAccent(c);
-    $('p-surprise').checked = false;
-    saveColour(c.key, false);
-  });
-  $('p-surprise').addEventListener('change', function () {
-    var on = $('p-surprise').checked;
-    var fav = radioValue('p-colour') || profile.accent_color;
-    if (!on && !accentByKey(fav)) {
-      // Turning Surprise off with no favourite: keep the colour showing right now.
-      var current = launchAccent || ACCENTS[3];
-      fav = current.key;
-      setRadio('p-colour', fav);
-    }
-    if (!on) { var c = accentByKey(fav); if (c) setAccent(c); }
-    saveColour(fav, on);
   });
 
   /* Workout weights: lbs or kg — saves straight away */

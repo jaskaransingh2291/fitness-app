@@ -155,6 +155,27 @@
     }
     /* A button that opens / closes the panel under it. The ▾ is drawn by CSS (.chev). */
     function chev() { var c = el('span', 'chev'); c.setAttribute('aria-hidden', 'true'); return c; }
+    /* The glowing ring at the top of Training: one segment per day of the split.
+       Days already done this round are lit, the next one glows. (A picture only: the text says the same.) */
+    function ring(nextDay, total) {
+      var NS = 'http://www.w3.org/2000/svg', R = 70, C = 2 * Math.PI * R, gap = total > 1 ? 9 : 0, seg = C / total - gap;
+      var wrap = el('div', 'sp-ring'); wrap.setAttribute('aria-hidden', 'true');
+      var svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 180 180'); svg.setAttribute('class', 'sp-ring-svg'); svg.setAttribute('focusable', 'false');
+      for (var i = 0; i < total; i++) {
+        var c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', '90'); c.setAttribute('cy', '90'); c.setAttribute('r', String(R));
+        c.setAttribute('class', 'sp-seg' + (i + 1 < nextDay ? ' done' : i + 1 === nextDay ? ' next' : ''));
+        c.setAttribute('stroke-dasharray', seg.toFixed(2) + ' ' + (C - seg).toFixed(2));
+        c.setAttribute('stroke-dashoffset', (-(i * C / total) - gap / 2).toFixed(2));
+        svg.appendChild(c);
+      }
+      wrap.appendChild(svg);
+      var mid = el('div', 'sp-ring-mid');
+      mid.appendChild(el('span', 'sp-ring-n', 'Day ' + nextDay));
+      mid.appendChild(el('span', 'sp-ring-of', 'of ' + total));
+      wrap.appendChild(mid);
+      return wrap;
+    }
     function disclose(button, panel, open, onToggle) {
       button.setAttribute('aria-controls', panel.id);
       function set(o) { button.setAttribute('aria-expanded', o ? 'true' : 'false'); panel.hidden = !o; }
@@ -174,14 +195,30 @@
       setStartStyle(true);
       var d = a.days[nextNo - 1] || a.days[0];
 
-      // NEXT UP · DAY n OF N            [Split name ▾]
+      // Ring "Day n of N", then Next up · split name, the day, Start + split options (⋯)
+      box.appendChild(ring(nextNo, a.days.length));
       var top = el('div', 'sp-top');
-      top.appendChild(el('p', 'sp-label sp-up', 'Next up · Day ' + nextNo + ' of ' + a.days.length));
+      top.appendChild(el('p', 'sp-label sp-up sr-only', 'Next up · Day ' + nextNo + ' of ' + a.days.length));
+      var kick = el('p', 'sp-kicker', 'Next up · ' + a.name); kick.setAttribute('aria-hidden', 'true');
+      top.appendChild(kick);
+      box.appendChild(top);
+      box.appendChild(el('h3', 'sp-day', d.name));
+      box.appendChild(el('p', 'muted small sp-meta', dayCount(d)));
+
       var mb = btn('sp-menu-btn', '', function () {}, a.name + ' — split options');
       mb.id = 'sp-menu-btn';
-      mb.appendChild(el('span', 'sp-menu-name', a.name)); mb.appendChild(chev());
-      top.appendChild(mb);
-      box.appendChild(top);
+      mb.appendChild(el('span', 'sp-menu-name sr-only', a.name));
+      var dots = el('span', 'sp-dots'); dots.setAttribute('aria-hidden', 'true'); mb.appendChild(dots);
+      var row = el('div', 'sp-actions');
+      if (hasActiveWorkout) {
+        row.appendChild(el('p', 'muted small sp-wait', 'Finish or discard the workout above before starting the next one.'));
+      } else {
+        var go = btn('btn-primary sp-start', 'Start day ' + nextNo, function () { startDay(a, nextNo, go); }, 'Start day ' + nextNo + ', ' + d.name);
+        go.id = 'sp-start';
+        row.appendChild(go);
+      }
+      row.appendChild(mb);
+      box.appendChild(row);
 
       var menu = el('div', 'sp-menu'); menu.id = 'sp-menu';
       if (!hasActiveWorkout) {
@@ -202,15 +239,6 @@
       box.appendChild(menu);
       disclose(mb, menu, false);
 
-      box.appendChild(el('h3', 'sp-day', d.name));
-      box.appendChild(el('p', 'muted small sp-meta', dayCount(d)));
-      if (hasActiveWorkout) {
-        box.appendChild(el('p', 'muted small sp-wait', 'Finish or discard the workout above before starting the next one.'));
-      } else {
-        var go = btn('btn-primary sp-start', 'Start day ' + nextNo, function () { startDay(a, nextNo, go); }, 'Start day ' + nextNo + ', ' + d.name);
-        go.id = 'sp-start';
-        box.appendChild(go);
-      }
       if (d.items.length) {
         var pb = btn('sp-peek', 'What’s in it', function () {}); pb.id = 'sp-peek'; pb.appendChild(chev());
         var pl = el('ul', 'sp-peek-list'); pl.id = 'sp-peek-list';
@@ -232,9 +260,10 @@
       var box = $('wo-split');
       if (!a) { box.appendChild(el('p', 'muted small sp-hint', api.ownerName() + ' isn’t following a split.')); return; }
       var d = a.days[nextNo - 1] || a.days[0];
+      box.appendChild(ring(nextNo, a.days.length));
       var top = el('div', 'sp-top');
-      top.appendChild(el('p', 'sp-label sp-up', 'Next up · Day ' + nextNo + ' of ' + a.days.length));
-      top.appendChild(el('p', 'sp-label sp-follow', a.name));
+      top.appendChild(el('p', 'sp-label sp-up sr-only', 'Next up · Day ' + nextNo + ' of ' + a.days.length));
+      top.appendChild(el('p', 'sp-kicker sp-follow', 'Next up · ' + a.name));
       box.appendChild(top);
       box.appendChild(el('h3', 'sp-day', d.name));
       box.appendChild(el('p', 'muted small sp-meta', dayCount(d)));

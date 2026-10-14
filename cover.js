@@ -1,9 +1,10 @@
-/* Taakat — your cover photo behind the TRAINING title.
-   The photo is shrunk on your phone first (JPEG, at most 600 KB) and stored in a PRIVATE Supabase folder
+/* Taakat — your cover photo behind the Training title.
+   You frame it first (pinch to zoom, drag to move, 4:5), then it's saved on your phone as a JPEG (at most 600 KB) and stored in a PRIVATE Supabase folder
    ("covers", file <your id>/cover.jpg). Only you can see it (and later, crew you accept). */
 (function (root) {
   'use strict';
   var MAX_BYTES = 600 * 1024, MAX_W = 1200, MAX_H = 1500, MAX_FILE = 30 * 1024 * 1024;
+  var OUT_W = 1080, OUT_H = 1350, MAX_ZOOM = 4;     // the cover is framed 4:5 (the shape of the Training hero)
 
   /* Fit w×h inside the limits, never enlarging. */
   function fitSize(w, h, maxW, maxH) {
@@ -13,7 +14,26 @@
     return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
   }
   function path(uid) { return String(uid) + '/cover.jpg'; }
-  var pure = { fitSize: fitSize, path: path, MAX_BYTES: MAX_BYTES };
+  /* Framing maths. The photo (w×h) fills a frame (W×H) at zoom 1 ("cover"); x,y = where its top-left sits in the frame. */
+  function baseScale(w, h, W, H) { return Math.max(W / w, H / h); }
+  /* Keep the frame covered: the photo can't be dragged so far that an edge shows. */
+  function clampPos(x, y, w, h, s, W, H) {
+    return { x: Math.min(0, Math.max(W - w * s, x)), y: Math.min(0, Math.max(H - h * s, y)) };
+  }
+  /* Zoom to z while keeping the photo point under (px,py) in the same place. */
+  function zoomAt(st, z, px, py) {
+    z = Math.min(MAX_ZOOM, Math.max(1, z));
+    var s0 = st.s0 * st.z, s1 = st.s0 * z;
+    var ix = (px - st.x) / s0, iy = (py - st.y) / s0;
+    var p = clampPos(px - ix * s1, py - iy * s1, st.w, st.h, s1, st.W, st.H);
+    return { z: z, x: p.x, y: p.y };
+  }
+  /* The part of the original photo that is inside the frame → source rectangle for the canvas. */
+  function cropRect(st) {
+    var s = st.s0 * st.z;
+    return { sx: -st.x / s, sy: -st.y / s, sw: st.W / s, sh: st.H / s };
+  }
+  var pure = { fitSize: fitSize, path: path, MAX_BYTES: MAX_BYTES, baseScale: baseScale, clampPos: clampPos, zoomAt: zoomAt, cropRect: cropRect };
 
   /* ====================================================================== */
   function TaakatCover(api) {
@@ -50,9 +70,9 @@
       if (!keyOf(whoProfile())) { hero.hidden = true; img.removeAttribute('src'); return; }
       photoUrl(true).then(function (url) {
         if (!url) { hero.hidden = true; return; }
-        img.onload = function () { hero.hidden = false; };
+        img.onload = function () { hero.hidden = false; heroScroll(); };
         img.onerror = function () { hero.hidden = true; };
-        if (img.getAttribute('src') !== url) img.src = url; else hero.hidden = false;
+        if (img.getAttribute('src') !== url) img.src = url; else { hero.hidden = false; heroScroll(); }
       }).catch(function (e) {
         console.warn('Cover photo not loaded:', e && (e.statusCode || e.message));
         hero.hidden = true;
@@ -85,13 +105,104 @@
       if (!f) return;
       if (!/^image\//.test(f.type || '')) { api.setMsg('cv-msg', 'That file isn’t a photo. Pick a JPEG, PNG or HEIC photo.'); return; }
       if (f.size > MAX_FILE) { api.setMsg('cv-msg', 'That photo is too big (over 30 MB). Pick a smaller one.'); return; }
-      if (!navigator.onLine) { api.setMsg('cv-msg', "You're offline. Connect to the internet and try again."); return; }
-      busy = true;
-      var b = $('cv-pick');
-      api.setBusy(b, true, 'Saving your photo…');
       api.setMsg('cv-msg', '');
+      openCrop(f);
+    });
+
+    /* ---------- framing: pinch to zoom, drag to move ---------- */
+    var cs = null;              // { w, h, W, H, s0, z, x, y, url }
+    var pointers = {}, gesture = null, lastFocus = null;
+    function openCrop(file) {
+      var img = $('cvc-img'), url = URL.createObjectURL(file);
+      api.setMsg('cvc-msg', '');
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        if (!(w > 0 && h > 0)) { closeCrop(); api.setMsg('cv-msg', 'Taakat couldn’t read that photo. Try a different one.'); return; }
+        lastFocus = document.activeElement;
+        $('cv-crop').hidden = false;
+        document.body.classList.add('cvc-open');
+        var F = $('cvc-frame'), W = F.clientWidth, H = F.clientHeight;
+        var s0 = baseScale(w, h, W, H);
+        cs = { w: w, h: h, W: W, H: H, s0: s0, z: 1, x: (W - w * s0) / 2, y: (H - h * s0) / 2, url: url };
+        $('cvc-zoom').value = '1';
+        draw();
+        api.focusQuiet($('cvc-title'));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); api.setMsg('cv-msg', 'Taakat couldn’t read that photo. Try a different one (JPEG or PNG works best).'); };
+      img.src = url;
+    }
+    function draw() {
+      if (!cs) return;
+      var s = cs.s0 * cs.z, p = clampPos(cs.x, cs.y, cs.w, cs.h, s, cs.W, cs.H);
+      cs.x = p.x; cs.y = p.y;
+      var img = $('cvc-img');
+      img.style.width = (cs.w * s) + 'px'; img.style.height = (cs.h * s) + 'px';
+      img.style.transform = 'translate3d(' + cs.x + 'px,' + cs.y + 'px,0)';
+    }
+    function closeCrop() {
+      $('cv-crop').hidden = true;
+      document.body.classList.remove('cvc-open');
+      if (cs && cs.url) URL.revokeObjectURL(cs.url);
+      var img = $('cvc-img'); img.removeAttribute('src'); img.onload = null;
+      cs = null; pointers = {}; gesture = null;
+      if (lastFocus && lastFocus.focus) api.focusQuiet(lastFocus);
+    }
+    function framePoint(ev) { var r = $('cvc-frame').getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+    function snapshot() {
+      var ids = Object.keys(pointers);
+      if (!cs || !ids.length) { gesture = null; return; }
+      if (ids.length === 1) { var p = pointers[ids[0]]; gesture = { mode: 'pan', px: p.x, py: p.y, x0: cs.x, y0: cs.y }; return; }
+      var a = pointers[ids[0]], b = pointers[ids[1]];
+      gesture = { mode: 'pinch', d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), z0: cs.z, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, x0: cs.x, y0: cs.y };
+    }
+    var frame = $('cvc-frame');
+    frame.addEventListener('pointerdown', function (ev) {
+      if (!cs) return;
+      ev.preventDefault();
+      try { frame.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+      pointers[ev.pointerId] = framePoint(ev); snapshot();
+    });
+    frame.addEventListener('pointermove', function (ev) {
+      if (!cs || !gesture || !pointers[ev.pointerId]) return;
+      pointers[ev.pointerId] = framePoint(ev);
+      var ids = Object.keys(pointers);
+      if (gesture.mode === 'pan' && ids.length === 1) {
+        var p = pointers[ids[0]];
+        cs.x = gesture.x0 + (p.x - gesture.px); cs.y = gesture.y0 + (p.y - gesture.py);
+      } else if (gesture.mode === 'pinch' && ids.length >= 2) {
+        var a = pointers[ids[0]], b = pointers[ids[1]];
+        var d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        // zoom around where the fingers started, then follow the fingers as they move
+        var r = zoomAt({ w: cs.w, h: cs.h, W: cs.W, H: cs.H, s0: cs.s0, z: gesture.z0, x: gesture.x0, y: gesture.y0 }, gesture.z0 * d / gesture.d0, gesture.mx, gesture.my);
+        cs.z = r.z; cs.x = r.x + (mx - gesture.mx); cs.y = r.y + (my - gesture.my);
+        $('cvc-zoom').value = String(cs.z);
+      }
+      draw();
+    });
+    function lift(ev) { if (pointers[ev.pointerId]) { delete pointers[ev.pointerId]; snapshot(); } }
+    frame.addEventListener('pointerup', lift);
+    frame.addEventListener('pointercancel', lift);
+    frame.addEventListener('wheel', function (ev) {
+      if (!cs) return;
+      ev.preventDefault();
+      var p = framePoint(ev), r = zoomAt(cs, cs.z * Math.exp(-ev.deltaY * 0.0015), p.x, p.y);
+      cs.z = r.z; cs.x = r.x; cs.y = r.y; $('cvc-zoom').value = String(cs.z); draw();
+    }, { passive: false });
+    $('cvc-zoom').addEventListener('input', function () {
+      if (!cs) return;
+      var r = zoomAt(cs, parseFloat($('cvc-zoom').value) || 1, cs.W / 2, cs.H / 2);
+      cs.z = r.z; cs.x = r.x; cs.y = r.y; draw();
+    });
+    $('cvc-cancel').addEventListener('click', function () { if (!busy) closeCrop(); });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && cs && !busy) closeCrop(); });
+    $('cvc-use').addEventListener('click', function () {
+      if (busy || !cs) return;
+      if (!navigator.onLine) { api.setMsg('cvc-msg', "You're offline. Connect to the internet and try again."); return; }
+      busy = true;
+      var b = $('cvc-use');
+      api.setBusy(b, true, 'Saving your photo…');
       var user = me();
-      shrink(f).then(function (blob) {
+      renderCrop().then(function (blob) {
         return sb.storage.from('covers').upload(path(user.id), blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
       }).then(function (res) {
         if (res.error) throw res.error;
@@ -102,43 +213,55 @@
         });
       }).then(function () {
         busy = false; api.setBusy(b, false); delete b.dataset.label;
+        closeCrop();
         card();
-        api.setMsg('cv-msg', 'Saved. Your photo is behind the TRAINING title now.', 'ok');
+        api.setMsg('cv-msg', 'Saved. Your photo is behind the Training title now.', 'ok');
       }).catch(function (e) {
         console.warn('Cover photo save failed:', e && (e.statusCode || e.code || e.message));
-        busy = false; api.setBusy(b, false);
+        busy = false; api.setBusy(b, false); delete b.dataset.label;
+        closeCrop();
         api.setMsg('cv-msg', e && e.taakat ? e.taakat : api.friendly(e) + ' Your photo wasn’t saved — try again.');
       });
     });
+    /* The framed part → a 1080×1350 JPEG under 600 KB (lower quality, then smaller, until it fits). */
+    function renderCrop() {
+      var img = $('cvc-img'), r = cropRect(cs);
+      var attempts = [[1, 0.85], [1, 0.75], [1, 0.65], [0.8, 0.65], [0.6, 0.6], [0.45, 0.55]];
+      function tryAt(i) {
+        var a = attempts[i], w = Math.round(OUT_W * a[0]), h = Math.round(OUT_H * a[0]);
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        var ctx = c.getContext('2d'); ctx.fillStyle = '#070909'; ctx.fillRect(0, 0, w, h);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, w, h);
+        return new Promise(function (res) { c.toBlob(res, 'image/jpeg', a[1]); }).then(function (blob) {
+          if (blob && blob.size <= MAX_BYTES) return blob;
+          if (i + 1 < attempts.length) return tryAt(i + 1);
+          var e2 = new Error('too big'); e2.taakat = 'Taakat couldn’t make that photo small enough. Try a different one.'; throw e2;
+        });
+      }
+      return tryAt(0);
+    }
 
-    /* Shrink to ≤1200×1500 JPEG under 600 KB (lower quality, then smaller, until it fits). */
-    function shrink(file) {
-      return loadImage(file).then(function (img) {
-        var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-        if (!(w > 0 && h > 0)) { var e = new Error('bad image'); e.taakat = 'Taakat couldn’t read that photo. Try a different one.'; throw e; }
-        var attempts = [[1, 0.82], [1, 0.7], [1, 0.6], [0.8, 0.6], [0.6, 0.6], [0.45, 0.55]];
-        function tryAt(i) {
-          var a = attempts[i], sz = fitSize(w * a[0], h * a[0]);
-          var c = document.createElement('canvas'); c.width = sz.w; c.height = sz.h;
-          var ctx = c.getContext('2d'); ctx.fillStyle = '#121211'; ctx.fillRect(0, 0, sz.w, sz.h);
-          ctx.drawImage(img, 0, 0, sz.w, sz.h);
-          return new Promise(function (res) { c.toBlob(res, 'image/jpeg', a[1]); }).then(function (blob) {
-            if (blob && blob.size <= MAX_BYTES) return blob;
-            if (i + 1 < attempts.length) return tryAt(i + 1);
-            var e2 = new Error('too big'); e2.taakat = 'Taakat couldn’t make that photo small enough. Try a different one.'; throw e2;
-          });
-        }
-        return tryAt(0);
-      });
+    /* ---------- Training hero: grows when you pull down, drifts and fades as you scroll ---------- */
+    var heroRaf = 0, calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function heroScroll() {
+      heroRaf = 0;
+      var hero = $('wo-hero'), img = $('wo-cover');
+      if (hero.hidden || api.current() !== 'workouts') return;
+      if (calm) { img.style.transform = ''; img.style.opacity = ''; return; }
+      var y = window.pageYOffset || document.documentElement.scrollTop || 0, h = hero.offsetHeight || 1;
+      if (y < 0) {                                   // pulled down past the top (iPhone bounce): the photo grows
+        hero.classList.add('stretch');
+        img.style.transform = 'scale(' + (1 + Math.min(0.6, -y / h)).toFixed(4) + ')';
+        img.style.opacity = '1';
+      } else {
+        hero.classList.remove('stretch');
+        var p = Math.min(1, y / h);
+        img.style.transform = 'translate3d(0,' + (y * 0.4).toFixed(1) + 'px,0) scale(' + (1 + p * 0.08).toFixed(4) + ')';
+        img.style.opacity = String(1 - p * 0.6);
+      }
     }
-    function loadImage(file) {
-      return new Promise(function (resolve, reject) {
-        var url = URL.createObjectURL(file), img = new Image();
-        img.onload = function () { resolve(img); setTimeout(function () { URL.revokeObjectURL(url); }, 1000); };
-        img.onerror = function () { URL.revokeObjectURL(url); var e = new Error('unreadable'); e.taakat = 'Taakat couldn’t read that photo. Try a different one (JPEG or PNG works best).'; reject(e); };
-        img.src = url;
-      });
-    }
+    window.addEventListener('scroll', function () { if (!heroRaf) heroRaf = requestAnimationFrame(heroScroll); }, { passive: true });
 
     $('cv-remove').addEventListener('click', function () {
       if (busy) return;
@@ -174,7 +297,7 @@
 
     return {
       paintHero: paintHero, card: card, removePhoto: removePhoto, has: function () { return !!key(); },
-      clear: function () { dropCache(); busy = false; }
+      clear: function () { dropCache(); busy = false; if (cs) closeCrop(); }
     };
   }
 

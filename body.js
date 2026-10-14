@@ -73,15 +73,42 @@
       return loading;
     }
 
-    /* the "Weight" row on Today */
+    /* the little line on Today's Weight tile: weigh-ins of the last 30 days + this week vs last week */
+    function drawSpark(today) {
+      var box = $('to-weigh-spark'), note = $('to-weigh-change');
+      if (!box || !note) return;
+      box.textContent = ''; note.textContent = '';
+      if (!today) return;
+      var pts = list.filter(function (e) { var d = daysApart(e.log_date, today); return d >= 0 && d <= 30; }).slice().reverse();
+      if (pts.length >= 2) {
+        var W = 120, H = 28, ys = pts.map(function (e) { return e.weight_kg; });
+        var lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys), span = hi - lo || 1;
+        var x0 = isoMs(pts[0].log_date), xs = (isoMs(pts[pts.length - 1].log_date) - x0) || 1;
+        var d = pts.map(function (e, i) {
+          var x = 2 + (isoMs(e.log_date) - x0) / xs * (W - 4), y = 3 + (1 - (e.weight_kg - lo) / span) * (H - 6);
+          return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+        }).join(' ');
+        var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), path = document.createElementNS(NS, 'path');
+        svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('class', 'spark'); svg.setAttribute('focusable', 'false');
+        path.setAttribute('d', d); svg.appendChild(path); box.appendChild(svg);
+      }
+      var wc = weekChange(list, today);
+      if (wc.diff !== null) {
+        var u = unit(), v = toUnit(Math.abs(wc.diff), u);
+        note.textContent = r1(v) === 0 ? 'Steady vs last week' : (wc.diff < 0 ? '▼ ' : '▲ ') + show1(v) + ' ' + u + ' vs last week';
+      }
+    }
+
+    /* the "Weight" tile on Today */
     function summary() {
       var sub = $('to-weigh-sub');
       load().then(function () {
         var n = newest(), today = C.localDate();
-        if (!n) { sub.textContent = ro() ? api.ownerName() + ' hasn’t logged a weigh-in yet' : 'Log your weight to see your trend'; return; }
+        if (!n) { drawSpark(null); sub.textContent = ro() ? api.ownerName() + ' hasn’t logged a weigh-in yet' : 'Log your weight to see your trend'; return; }
         var ago = daysApart(n.log_date, today);
         sub.textContent = fmt(n.weight_kg) + ' · ' + (ago <= 0 ? 'today' : ago === 1 ? 'yesterday' : ago + ' days ago');
-      }).catch(function () { sub.textContent = 'Log your weight and see your trend'; });
+        drawSpark(today);
+      }).catch(function () { sub.textContent = 'Log your weight and see your trend'; drawSpark(null); });
     }
 
     /* ---------- the Weight screen ---------- */

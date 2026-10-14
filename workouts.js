@@ -288,12 +288,18 @@
       var t = summarise(exBy[r.id] || [], u);
       var li = el('li');
       var b = el('button', 'wo-item'); b.type = 'button';
+      // Date badge (Tue / 6), then the day's name and what was done
+      var dt = new Date(String(r.session_date) + 'T12:00:00Z');
+      var badge = el('span', 'wo-date'); badge.setAttribute('aria-hidden', 'true');
+      badge.appendChild(el('span', 'wo-date-d', ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getUTCDay()] || ''));
+      badge.appendChild(el('span', 'wo-date-n', String(dt.getUTCDate() || '')));
+      b.appendChild(badge);
       var left = el('span', 'entry-text');
-      left.appendChild(el('span', 'entry-name', dayText(r.session_date) + (r.split_day ? ' · ' + r.split_day : '')));
+      left.appendChild(el('span', 'entry-name', r.split_day || 'Workout'));
       var bits = [t.exercises + (t.exercises === 1 ? ' exercise' : ' exercises'), t.sets + (t.sets === 1 ? ' set' : ' sets')];
       var mins = minutesBetween(r.started_at, r.finished_at);
       if (mins) bits.push(mins + ' min');
-      left.appendChild(el('span', 'entry-meta', bits.join(' · ')));
+      left.appendChild(el('span', 'entry-meta', dayText(r.session_date) + ' · ' + bits.join(' · ')));
       if (!r.finished_at) left.appendChild(el('span', 'wk-flag', 'Not finished'));
       b.appendChild(left);
       var right = el('span', 'wo-vol');
@@ -389,6 +395,7 @@
       api.show('session');
       $('ws-title').textContent = 'Workout';
       $('ws-sub').textContent = 'Loading…';
+      $('ws-timer').hidden = true; $('ws-prog').hidden = true;
       $('ws-list').textContent = '';
       $('ws-tools').hidden = true;
       api.setMsg('ws-msg', opts.note || '', 'ok');
@@ -500,6 +507,45 @@
       if (!exs.length) list.appendChild(el('p', 'muted ws-none', finished ? 'No exercises in this workout.' : 'Add your first exercise to get going.'));
       exs.forEach(function (e, i) { list.appendChild(view ? roCard(e, u) : exCard(e, i, u)); });
       $('ws-add').textContent = exs.length ? '+ Add another exercise' : '+ Add exercise';
+      refreshProgress();
+      runTimer();
+    }
+
+    /* Live workout: "2 of 6 exercises done" + one segment per exercise, and the card you're on glows. */
+    function refreshProgress() {
+      var box = $('ws-prog'), live = !!(session && !session.finished_at && !ro() && exs.length);
+      box.hidden = !live;
+      var segs = $('ws-segs'); segs.textContent = '';
+      var doneEx = 0, current = -1;
+      exs.forEach(function (e, i) {
+        var n = e.rows.filter(function (r) { return r.done; }).length;
+        var full = live && e.rows.length > 0 && n === e.rows.length;
+        if (full) doneEx++; else if (live && current < 0) current = i;
+        if (live) segs.appendChild(el('span', 'ws-seg' + (full ? ' done' : n ? ' part' : '')));
+        var card = document.querySelector('#ws-list .ws-ex[data-ex="' + e.id + '"]');
+        if (card) { card.classList.toggle('complete', full); card.classList.toggle('current', live && i === current); }
+      });
+      if (live) $('ws-count').textContent = doneEx + ' of ' + exs.length + (exs.length === 1 ? ' exercise' : ' exercises') + ' done';
+    }
+    /* Live workout: how long you've been going (hidden after 6 hours — it was probably left open). */
+    var timerId = null;
+    function runTimer() {
+      clearInterval(timerId); timerId = null;
+      var t = $('ws-timer');
+      if (!session || session.finished_at || ro()) { t.hidden = true; return; }
+      var start = Date.parse(session.started_at);
+      function pad(n) { return (n < 10 ? '0' : '') + n; }
+      function tick() {
+        if (!session || session.finished_at || ro() || !isFinite(start)) { clearInterval(timerId); timerId = null; t.hidden = true; return; }
+        if (api.current() !== 'session') return;
+        var sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+        if (sec > 6 * 3600) { t.hidden = true; return; }
+        var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
+        $('ws-timer-t').textContent = (h ? h + ':' + pad(m) : String(m)) + ':' + pad(sec % 60);
+        t.hidden = false;
+      }
+      tick();
+      timerId = setInterval(tick, 1000);
     }
 
     /* Someone else's workout: what they did, nothing to tap or type. */
@@ -627,6 +673,7 @@
       var focusedLabel = document.activeElement && old.contains(document.activeElement) ? document.activeElement.getAttribute('aria-label') : null;
       var fresh = exCard(e, idx, unit());
       old.parentNode.replaceChild(fresh, old);
+      refreshProgress();
       if (focusedLabel) {
         var again = fresh.querySelector('[aria-label="' + focusedLabel.replace(/"/g, '\\"') + '"]');
         if (again && again.tagName === 'BUTTON') api.focusQuiet(again);

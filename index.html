@@ -7,7 +7,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Taakat</title>
 <meta name="description" content="Workout and meal tracker for our crew.">
-<meta name="theme-color" content="#121211">
+<meta name="theme-color" content="#070909">
 <meta name="color-scheme" content="dark">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -18,21 +18,21 @@
 <meta name="apple-mobile-web-app-title" content="Taakat">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&amp;family=Barlow:wght@400;500;600;700&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=3.16.0">
-<script src="vendor/supabase.js?v=3.16.0" defer></script>
-<script src="config.js?v=3.16.0" defer></script>
-<script src="calc.js?v=3.16.0" defer></script>
-<script src="meals.js?v=3.16.0" defer></script>
-<script src="workouts.js?v=3.16.0" defer></script>
-<script src="splits.js?v=3.16.0" defer></script>
-<script src="chart.js?v=3.16.0" defer></script>
-<script src="exinfo.js?v=3.16.0" defer></script>
-<script src="body.js?v=3.16.0" defer></script>
-<script src="data.js?v=3.16.0" defer></script>
-<script src="cover.js?v=3.16.0" defer></script>
-<script src="crew.js?v=3.16.0" defer></script>
-<script src="app.js?v=3.16.0" defer></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
+<link rel="stylesheet" href="styles.css?v=4.5.0">
+<script src="vendor/supabase.js?v=4.5.0" defer></script>
+<script src="config.js?v=4.5.0" defer></script>
+<script src="calc.js?v=4.5.0" defer></script>
+<script src="meals.js?v=4.5.0" defer></script>
+<script src="workouts.js?v=4.5.0" defer></script>
+<script src="splits.js?v=4.5.0" defer></script>
+<script src="chart.js?v=4.5.0" defer></script>
+<script src="exinfo.js?v=4.5.0" defer></script>
+<script src="body.js?v=4.5.0" defer></script>
+<script src="data.js?v=4.5.0" defer></script>
+<script src="cover.js?v=4.5.0" defer></script>
+<script src="crew.js?v=4.5.0" defer></script>
+<script src="app.js?v=4.5.0" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
@@ -192,7 +192,7 @@
   <!-- FIRST-TIME SETUP: one question per screen -->
   <section id="view-setup" class="card view" hidden aria-labelledby="setup-question">
     <div class="progress" aria-hidden="true"><div class="progress-fill" id="setup-progress"></div></div>
-    <p class="step-count" id="setup-count">Step 1 of 9</p>
+    <p class="step-count" id="setup-count">Step 1 of 8</p>
     <form id="setup-form" novalidate>
 
       <div class="step" data-step="name">
@@ -259,13 +259,6 @@
         <p class="hint" id="s-bf-hint" aria-live="polite"></p>
       </div>
 
-      <fieldset class="step" data-step="colour" hidden>
-        <legend class="step-q" tabindex="-1">Pick your colour</legend>
-        <p class="muted">Your favourite colour for Taakat. You can change it any time in your profile.</p>
-        <div class="swatches" id="s-swatches"></div>
-        <label class="toggle-row"><input type="checkbox" id="s-surprise" checked><span class="toggle" aria-hidden="true"></span><span><b>Surprise me</b><small>A different colour every time you open Taakat</small></span></label>
-      </fieldset>
-
       <p id="setup-msg" class="msg" role="alert" hidden></p>
       <div class="step-actions">
         <button type="button" class="btn-secondary btn-back fast-tap" id="setup-back">Back</button>
@@ -288,23 +281,25 @@
       <p class="muted small day-note" id="day-note" hidden></p>
       <p id="home-msg" class="msg" role="status" hidden></p>
       <div class="gauge-wrap">
-        <svg class="gauge" viewBox="0 0 220 124" aria-hidden="true" focusable="false">
-          <path class="gauge-track" d="M 20 112 A 90 90 0 0 1 200 112"></path>
-          <path class="gauge-fill" id="gauge-fill" d="M 20 112 A 90 90 0 0 1 200 112"></path>
+        <svg class="gauge" viewBox="0 0 300 168" aria-hidden="true" focusable="false">
+          <defs><linearGradient id="gauge-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2DB59E"></stop><stop offset="1" stop-color="#A6F7DE"></stop></linearGradient></defs>
+          <path class="gauge-track" d="M 30 150 A 120 120 0 0 1 270 150"></path>
+          <path class="gauge-fill" id="gauge-fill" d="M 30 150 A 120 120 0 0 1 270 150"></path>
         </svg>
         <div class="gauge-center">
-          <span class="gauge-number" id="home-left">–</span>
           <span class="gauge-label" id="home-left-label">kcal left</span>
+          <span class="gauge-number" id="home-left">–</span>
+          <p class="gauge-sub" id="home-eaten-line"></p>
         </div>
       </div>
-      <div class="kbar" aria-hidden="true"><div class="kbar-fill" id="home-bar"></div></div>
-      <p class="gauge-sub" id="home-eaten-line"></p>
       <p class="note-warn" id="home-over" hidden></p>
-      <div class="stat-grid">
-        <div class="stat"><span class="stat-label" id="home-def-label">Deficit so far</span><span class="stat-value" id="home-def">–</span></div>
-        <div class="stat"><span class="stat-label">Carbs</span><span class="stat-value" id="home-carbs">–</span></div>
-        <div class="stat"><span class="stat-label">Fat</span><span class="stat-value" id="home-fat">–</span></div>
+      <div class="caps-bracket" aria-hidden="true"></div>
+      <div class="caps">
+        <div class="cap cap-main"><span class="cap-v" id="home-prot">–</span><span class="cap-k">Protein</span></div>
+        <div class="cap"><span class="cap-v" id="home-carbs">–</span><span class="cap-k">Carbs</span></div>
+        <div class="cap"><span class="cap-v" id="home-fat">–</span><span class="cap-k">Fat</span></div>
       </div>
+      <p class="def-line"><span id="home-def-label">Deficit so far</span> <b id="home-def">–</b></p>
       <div class="protein" id="home-protein"></div>
     </div>
 
@@ -325,8 +320,10 @@
         <button type="button" class="btn-link" id="backup-later">Not now</button>
       </div>
     </div>
-    <button type="button" class="btn-secondary week-btn" id="to-weigh"><span class="week-btn-text"><b>Weight</b><small id="to-weigh-sub">Log your weight and see your trend</small></span><span aria-hidden="true">&#8250;</span></button>
-    <button type="button" class="btn-secondary week-btn" id="to-week"><span class="week-btn-text"><b>Past 7 days</b><small>How your weight is likely changing</small></span><span aria-hidden="true">&#8250;</span></button>
+    <div class="tiles">
+      <button type="button" class="tile" id="to-weigh"><span class="tile-k">Weight</span><span class="tile-sub" id="to-weigh-sub">Log your weight and see your trend</span><span class="tile-spark" id="to-weigh-spark" aria-hidden="true"></span><span class="tile-note" id="to-weigh-change"></span></button>
+      <button type="button" class="tile" id="to-week"><span class="tile-k">Past 7 days</span><span class="tile-sub">How your weight is likely changing</span><span class="tile-go" aria-hidden="true">See the estimate &#8250;</span></button>
+    </div>
 
     <div class="card numbers-card">
       <h2 class="card-title small-title" id="numbers-card-title">Your numbers</h2>
@@ -339,7 +336,7 @@
       <p class="muted small" id="home-diff"></p>
       <div id="home-notes"></div>
     </div>
-    <div class="add-bar"><button type="button" class="btn-primary" id="log-food">+ Log food</button></div>
+    <div class="add-bar"><button type="button" class="fab" id="log-food" aria-label="Log food"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button></div>
   </section>
 
   <!-- LOG FOOD: search -->
@@ -349,12 +346,12 @@
       <h2 id="af-title" class="card-title" tabindex="-1">Log food</h2>
     </div>
     <p class="for-day" id="af-day" hidden></p>
-    <fieldset class="inline-choices meal-chips" id="af-meals"><legend class="sr-only">Meal</legend>
+    <fieldset class="inline-choices meal-chips" id="af-meals"><legend class="sr-only">Meal</legend><div class="seg">
       <label class="pill"><input type="radio" name="af-meal" value="breakfast"><span>Breakfast</span></label>
       <label class="pill"><input type="radio" name="af-meal" value="lunch"><span>Lunch</span></label>
       <label class="pill"><input type="radio" name="af-meal" value="dinner"><span>Dinner</span></label>
       <label class="pill"><input type="radio" name="af-meal" value="snacks"><span>Snacks</span></label>
-    </fieldset>
+    </div></fieldset>
     <label for="af-search" class="sr-only">Search foods</label>
     <input id="af-search" class="search" type="search" placeholder="Search: chicken, naan, Big Mac…" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search" maxlength="60">
     <fieldset class="inline-choices filter-chips" id="af-filters"><legend class="sr-only">Show</legend>
@@ -400,12 +397,12 @@
           <span><b id="pf-p">–</b> protein</span><span><b id="pf-c">–</b> carbs</span><span><b id="pf-f">–</b> fat</span><span><b id="pf-fib">–</b> fibre</span>
         </div>
       </div>
-      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend>
+      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend><div class="seg">
         <label class="pill"><input type="radio" name="pf-meal" value="breakfast"><span>Breakfast</span></label>
         <label class="pill"><input type="radio" name="pf-meal" value="lunch"><span>Lunch</span></label>
         <label class="pill"><input type="radio" name="pf-meal" value="dinner"><span>Dinner</span></label>
         <label class="pill"><input type="radio" name="pf-meal" value="snacks"><span>Snacks</span></label>
-      </fieldset>
+      </div></fieldset>
       <p id="pf-msg" class="msg" role="alert" hidden></p>
       <button type="submit" class="btn-primary fast-tap" id="pf-save">Add</button>
       <button type="button" class="btn-link danger-link" id="pf-delete" hidden>Delete this entry</button>
@@ -433,12 +430,12 @@
         <div><label for="cf-f">Fat</label><div class="num-row"><input id="cf-f" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">g</span></div></div>
         <div><label for="cf-fib">Fibre</label><div class="num-row"><input id="cf-fib" type="text" inputmode="decimal" maxlength="6" autocomplete="off"><span class="unit">g</span></div></div>
       </div>
-      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend>
+      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend><div class="seg">
         <label class="pill"><input type="radio" name="cf-meal" value="breakfast"><span>Breakfast</span></label>
         <label class="pill"><input type="radio" name="cf-meal" value="lunch"><span>Lunch</span></label>
         <label class="pill"><input type="radio" name="cf-meal" value="dinner"><span>Dinner</span></label>
         <label class="pill"><input type="radio" name="cf-meal" value="snacks"><span>Snacks</span></label>
-      </fieldset>
+      </div></fieldset>
       <p id="cf-msg" class="msg" role="alert" hidden></p>
       <button type="submit" class="btn-primary fast-tap" id="cf-save">Add</button>
       <button type="button" class="btn-link danger-link" id="cf-delete" hidden>Delete this entry</button>
@@ -498,6 +495,8 @@
       </div>
       <h2 id="ws-title" class="card-title" tabindex="-1">Workout</h2>
       <p class="muted small" id="ws-sub"></p>
+      <span class="ws-timer" id="ws-timer" role="timer" aria-label="Workout time" hidden><span class="ws-timer-dot" aria-hidden="true"></span><span id="ws-timer-t">0:00</span></span>
+      <div class="ws-prog" id="ws-prog" hidden><p class="ws-count" id="ws-count"></p><div class="ws-segs" id="ws-segs" aria-hidden="true"></div></div>
       <p id="ws-msg" class="msg" role="status" hidden></p>
     </div>
     <div id="ws-list" class="ws-list" aria-live="polite"></div>
@@ -794,13 +793,6 @@
     </div>
 
     <div class="card">
-      <h2 class="card-title">App colour</h2>
-      <div class="swatches" id="p-swatches"></div>
-      <label class="toggle-row"><input type="checkbox" id="p-surprise"><span class="toggle" aria-hidden="true"></span><span><b>Surprise me</b><small>A different colour every time you open Taakat</small></span></label>
-      <p id="colour-msg" class="msg" role="status" hidden></p>
-    </div>
-
-    <div class="card">
       <h2 class="card-title">Workout weights</h2>
       <fieldset class="inline-choices unit-chips" id="p-units"><legend class="sr-only">Weight unit for workouts</legend>
         <label class="pill"><input type="radio" name="p-unit" value="lb"><span>lbs</span></label>
@@ -824,7 +816,7 @@
 
     <div class="card" id="cv-card">
       <h2 class="card-title">Cover photo</h2>
-      <p class="muted small">Put a photo of your own behind the TRAINING title. It&rsquo;s stored privately &mdash; only you can see it.</p>
+      <p class="muted small">Put a photo of your own behind the Training title. It&rsquo;s stored privately &mdash; only you can see it.</p>
       <div class="cv-preview" id="cv-preview-wrap" hidden><img id="cv-preview" alt="Your cover photo"></div>
       <input type="file" id="cv-file" accept="image/*" hidden>
       <button type="button" class="btn-secondary" id="cv-pick">Choose a photo</button>
@@ -900,5 +892,18 @@
     <span>Training</span>
   </button>
 </nav>
+
+<!-- COVER PHOTO: frame it (pinch to zoom, drag to move) before saving -->
+<div class="cvc" id="cv-crop" role="dialog" aria-modal="true" aria-labelledby="cvc-title" hidden>
+  <div class="cvc-panel">
+    <h2 class="cvc-title" id="cvc-title" tabindex="-1">Frame your photo</h2>
+    <p class="muted small cvc-hint">Pinch to zoom and drag to move. This is how it will sit behind the Training title.</p>
+    <div class="cvc-frame" id="cvc-frame"><img id="cvc-img" alt="Your photo, being framed" draggable="false"><div class="cvc-shade" aria-hidden="true"><span class="cvc-label">Training</span></div></div>
+    <div class="cvc-zoom"><span aria-hidden="true">&minus;</span><input type="range" id="cvc-zoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom"><span aria-hidden="true">+</span></div>
+    <p id="cvc-msg" class="msg" role="alert" hidden></p>
+    <button type="button" class="btn-primary" id="cvc-use">Use this photo</button>
+    <button type="button" class="btn-link" id="cvc-cancel">Cancel</button>
+  </div>
+</div>
 </body>
 </html>

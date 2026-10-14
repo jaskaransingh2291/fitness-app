@@ -197,14 +197,14 @@
       var left = target - t.kcal, over = left < 0;
       var frac = target > 0 ? Math.min(1, t.kcal / target) : 0;
       var fill = $('gauge-fill');
-      var len = 282.7;   // half-circle with r = 90
+      var len = 377;     // half-circle with r = 120
       fill.style.strokeDasharray = (len * frac).toFixed(1) + ' ' + len;
       fill.classList.toggle('over', over);
       var bar = $('home-bar');
       if (bar) { bar.style.width = (frac * 100).toFixed(1) + '%'; bar.classList.toggle('over', over); }
       $('home-left').textContent = loading ? '…' : fmt(Math.abs(left));
       $('home-left-label').textContent = over ? 'kcal over target' : (isPast ? 'kcal under target' : 'kcal left');
-      $('home-eaten-line').textContent = loading ? (isPast ? 'Loading that day’s food…' : 'Loading today’s food…') : 'Eaten ' + fmt(t.kcal) + ' of ' + fmt(target) + ' kcal';
+      $('home-eaten-line').textContent = loading ? (isPast ? 'Loading that day’s food…' : 'Loading today’s food…') : fmt(t.kcal) + ' of ' + fmt(target) + ' kcal eaten';
       var overEl = $('home-over');
       overEl.hidden = !over || loading;
       var subj = api.viewOnly() ? api.ownerName() + (isPast ? ' was ' : ' is ') : (isPast ? 'You were ' : 'You’re ');
@@ -213,6 +213,7 @@
       var vsMaint = maint - t.kcal;
       $('home-def-label').textContent = (vsMaint >= 0 ? 'Deficit' : 'Surplus') + (isPast ? '' : ' so far');
       var defEl = $('home-def'); defEl.textContent = fmt(Math.abs(vsMaint)); defEl.appendChild(el('small', null, 'kcal'));
+      $('home-prot').textContent = g1(t.p);
       $('home-carbs').textContent = g1(t.c);
       $('home-fat').textContent = g1(t.f);
       renderProtein(t.p, n);
@@ -223,10 +224,17 @@
       var box = $('home-protein'); box.textContent = '';
       if (!n.ok) return;
       var pr = n.protein, top = pr.perfect || pr.rec;
+      // Head: "Protein · today" and how far to the next goal (recommended first, then perfect)
+      var isPast = day && day !== C.localDate();
       var head = el('div', 'protein-head');
-      head.appendChild(el('span', 'protein-title', 'Protein'));
-      head.appendChild(el('b', 'protein-eaten', g1(eaten) + ' eaten'));
+      head.appendChild(el('span', 'protein-title', 'Protein · ' + (isPast ? 'that day' : 'today')));
+      var nextGoal = eaten < pr.rec ? ['recommended', pr.rec] : (pr.perfect && eaten < pr.perfect ? ['perfect', pr.perfect] : null);
+      head.appendChild(el('span', 'protein-togo', nextGoal ? Math.ceil(nextGoal[1] - eaten) + ' g to ' + nextGoal[0] : '✓ Goal reached'));
       box.appendChild(head);
+      var big = el('p', 'protein-eaten');
+      big.appendChild(document.createTextNode(g1(eaten) + ' eaten'));
+      big.appendChild(el('span', 'protein-of', ' of ' + pr.rec + ' g recommended'));
+      box.appendChild(big);
       var bar = el('div', 'pbar'); bar.setAttribute('role', 'img');
       bar.setAttribute('aria-label', 'Protein ' + Math.round(eaten) + ' grams eaten. Minimum ' + pr.min + ', recommended ' + pr.rec + (pr.perfect ? ', perfect ' + pr.perfect : '') + ' grams.');
       var scale = top * 1.1;
