@@ -19,32 +19,33 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&amp;family=Noto+Sans+Gurmukhi:wght@600&amp;display=swap">
-<link rel="stylesheet" href="styles.css?v=4.5.0">
-<script src="vendor/supabase.js?v=4.5.0" defer></script>
-<script src="config.js?v=4.5.0" defer></script>
-<script src="calc.js?v=4.5.0" defer></script>
-<script src="meals.js?v=4.5.0" defer></script>
-<script src="workouts.js?v=4.5.0" defer></script>
-<script src="splits.js?v=4.5.0" defer></script>
-<script src="chart.js?v=4.5.0" defer></script>
-<script src="exinfo.js?v=4.5.0" defer></script>
-<script src="body.js?v=4.5.0" defer></script>
-<script src="data.js?v=4.5.0" defer></script>
-<script src="cover.js?v=4.5.0" defer></script>
-<script src="crew.js?v=4.5.0" defer></script>
-<script src="app.js?v=4.5.0" defer></script>
+<link rel="stylesheet" href="styles.css?v=4.6.4">
+<script src="vendor/supabase.js?v=4.6.4" defer></script>
+<script src="config.js?v=4.6.4" defer></script>
+<script src="calc.js?v=4.6.4" defer></script>
+<script src="ai.js?v=4.6.4" defer></script>
+<script src="meals.js?v=4.6.4" defer></script>
+<script src="workouts.js?v=4.6.4" defer></script>
+<script src="splits.js?v=4.6.4" defer></script>
+<script src="chart.js?v=4.6.4" defer></script>
+<script src="exinfo.js?v=4.6.4" defer></script>
+<script src="body.js?v=4.6.4" defer></script>
+<script src="data.js?v=4.6.4" defer></script>
+<script src="cover.js?v=4.6.4" defer></script>
+<script src="crew.js?v=4.6.4" defer></script>
+<script src="app.js?v=4.6.4" defer></script>
 </head>
 <body>
 <noscript><p class="noscript">Taakat needs JavaScript turned on in your browser.</p></noscript>
 <div class="glow glow-a" aria-hidden="true"></div>
 <div class="glow glow-b" aria-hidden="true"></div>
 
-<div id="update-banner" class="banner update" role="status" hidden>
+<div id="update-notice" class="notice update" role="status" hidden>
   <span>A new version of Taakat is ready.</span>
-  <button type="button" class="banner-btn" id="update-btn">Update now</button>
+  <button type="button" class="notice-btn" id="update-btn">Update now</button>
 </div>
-<div id="offline" class="banner" role="status" hidden>
-  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="banner-icon"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01M3 3l18 18"></path></svg>
+<div id="offline" class="notice" role="status" hidden>
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="notice-icon"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01M3 3l18 18"></path></svg>
   <span>You're offline. Taakat needs internet to log in and save.</span>
 </div>
 
@@ -360,11 +361,45 @@
       <label class="pill small-pill"><input type="radio" name="af-filter" value="fast_food"><span>Fast food</span></label>
       <label class="pill small-pill"><input type="radio" name="af-filter" value="indian"><span>Indian</span></label>
     </fieldset>
+    <div class="ai-row">
+      <button type="button" class="ai-btn" id="af-ai-describe"><span class="ai-spark" aria-hidden="true"></span><span class="ai-t">Describe it</span></button>
+      <button type="button" class="ai-btn" id="af-ai-label"><span class="ai-cam" aria-hidden="true"></span><span class="ai-t">Scan a label</span></button>
+    </div>
+    <input type="file" id="ai-label-file" accept="image/*" hidden>
+    <p id="af-ai-msg" class="msg" role="alert" hidden></p>
     <div class="af-bar">
       <p id="af-status" class="muted small" aria-live="polite"></p>
       <button type="button" class="btn-link af-custom" id="af-custom">Can&rsquo;t find it? Add your own</button>
     </div>
     <ul id="af-results" class="results"></ul>
+  </section>
+
+  <!-- LOG FOOD: describe it (AI) -->
+  <section id="view-aidescribe" class="card view" hidden aria-labelledby="dsc-title">
+    <div class="sheet-head">
+      <button type="button" class="btn-link back-link" id="dsc-back">&#8249; Log food</button>
+      <h2 id="dsc-title" class="card-title" tabindex="-1">Describe it</h2>
+    </div>
+    <p class="for-day" id="dsc-day" hidden></p>
+    <p class="muted small">Say what you ate and roughly how much. The AI estimates the numbers, and you check them before anything is saved.</p>
+    <label for="dsc-text">What did you eat?</label>
+    <input id="dsc-text" class="dsc-input" type="text" maxlength="300" autocomplete="off" autocapitalize="sentences" enterkeyhint="go" placeholder="e.g. 2 rotis, a bowl of dal and half a cup of rice">
+    <p id="dsc-msg" class="msg" role="alert" hidden></p>
+    <button type="button" class="btn-primary" id="dsc-go">Work it out</button>
+    <div id="dsc-out" class="dsc-out" hidden>
+      <h3 class="dsc-h">AI estimate <span class="muted">&middot; check the amounts</span></h3>
+      <ul class="results dsc-list" id="dsc-list"></ul>
+      <p class="dsc-total" id="dsc-total"></p>
+      <fieldset class="inline-choices meal-chips"><legend class="field-legend">Meal</legend><div class="seg">
+        <label class="pill"><input type="radio" name="dsc-meal" value="breakfast"><span>Breakfast</span></label>
+        <label class="pill"><input type="radio" name="dsc-meal" value="lunch"><span>Lunch</span></label>
+        <label class="pill"><input type="radio" name="dsc-meal" value="dinner"><span>Dinner</span></label>
+        <label class="pill"><input type="radio" name="dsc-meal" value="snacks"><span>Snacks</span></label>
+      </div></fieldset>
+      <p id="dsc-save-msg" class="msg" role="alert" hidden></p>
+      <button type="button" class="btn-primary" id="dsc-add">Add</button>
+      <p class="muted small">AI estimates use typical USDA / Canadian Nutrient File values, so real numbers can differ. Saved foods are marked &ldquo;AI estimate&rdquo; and you can edit them on Today.</p>
+    </div>
   </section>
 
   <!-- LOG FOOD: amount -->

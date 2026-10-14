@@ -258,7 +258,9 @@
       if (e.brand) parts.push(e.brand);
       var q = Number(e.quantity) || 1;
       if (e.serving_label) parts.push((q !== 1 ? (Math.round(q * 100) / 100) + ' × ' : '') + e.serving_label);
-      if (e.is_estimate) parts.push('estimate');
+      if (e.source_ref === 'ai-describe') parts.push('AI estimate');
+      else if (e.source_ref === 'ai-label') parts.push('from label (AI)');
+      else if (e.is_estimate) parts.push('estimate');
       return parts.join(' · ');
     }
 
@@ -321,6 +323,7 @@
       setRadio('af-meal', meal || defaultMeal());
       $('af-search').value = '';
       $('af-results').textContent = '';
+      api.setMsg('af-ai-msg', '');
       if (!day) day = api.viewedDay();
       setForDay('af-day', null);
       api.show('addfood');
@@ -626,9 +629,11 @@
     /* ---------- your own food ---------- */
     $('af-custom').addEventListener('click', function () { openCustom(null, null, radio('af-meal') || defaultMeal()); });
     function numStr(v) { return v == null || v === '' ? '' : String(Math.round(Number(v) * 10) / 10); }
+    var customTag = null;     // AI-made foods keep their tag (and "estimate" mark) when edited or logged again
     function openCustom(entry, recentRow, meal) {
       editing = entry || null;
       var src = entry || recentRow || {};
+      customTag = /^ai-/.test(src.source_ref || '') ? { source_ref: src.source_ref, is_estimate: !!src.is_estimate } : null;
       $('cf-title').textContent = entry ? 'Edit food' : 'Add your own food';
       $('cf-name').value = src.food_name || '';
       $('cf-serving').value = src.serving_label || '';
@@ -673,14 +678,140 @@
       if (!meal) return api.setMsg('cf-msg', 'Pick a meal.');
       var serving = $('cf-serving').value.trim().slice(0, 80) || '1 serving';
       saveRow({
-        user_id: api.me().id, log_date: day, meal: meal, source: 'custom', source_ref: null, brand: null,
+        user_id: api.me().id, log_date: day, meal: meal, source: 'custom', source_ref: customTag ? customTag.source_ref : null, brand: null,
         food_name: name, serving_label: serving, quantity: 1, grams: null,
         kcal: Math.round(kcal * 10) / 10, protein_g: macros.protein_g, carbs_g: macros.carbs_g, fat_g: macros.fat_g, fibre_g: macros.fibre_g,
-        is_estimate: false
+        is_estimate: customTag ? customTag.is_estimate : false
       }, 'cf-msg', 'cf-save');
     });
 
     $('log-food').addEventListener('click', function () { openAdd(null); });
+
+    /* ---------- AI: "Describe it" and "Scan a label" (ai.js + the ai-food Supabase function) ---------- */
+    function AI() { return window.TaakatAI || null; }
+    function aiCfg() { return window.TAAKAT_CONFIG || null; }
+    function aiErr(e) { var t = AI().pure.errorText(e && e.code); return e && e.code === 'ai' && e.detail ? t + ' (Details for Jas: ' + e.detail + ')' : t; }
+    function aiBusyBtn(b, on, label) {
+      var t = b.querySelector('.ai-t');
+      if (on) { b.dataset.idle = t.textContent; t.textContent = label; } else if (b.dataset.idle) { t.textContent = b.dataset.idle; }
+      b.disabled = on; b.classList.toggle('btn-busy', on);
+      if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
+    }
+    var adItems = [], adBusy = false, labelBusy = false;
+    $('af-ai-describe').addEventListener('click', function () {
+      if (api.viewOnly()) return;
+      api.setMsg('af-ai-msg', '');
+      $('dsc-text').value = ''; adItems = []; $('dsc-out').hidden = true;
+      api.setMsg('dsc-msg', ''); api.setMsg('dsc-save-msg', '');
+      setRadio('dsc-meal', radio('af-meal') || defaultMeal());
+      if (!day) day = api.viewedDay();
+      setForDay('dsc-day', null);
+      api.show('aidescribe');
+      api.focusQuiet($('dsc-title'));
+    });
+    $('dsc-back').addEventListener('click', function () { api.show('addfood'); });
+    $('dsc-text').addEventListener('input', function () { api.setMsg('dsc-msg', ''); });
+    $('dsc-text').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); $('dsc-text').blur(); $('dsc-go').click(); } });
+    $('dsc-go').addEventListener('click', function () {
+      if (adBusy) return;
+      var t = $('dsc-text').value.trim();
+      if (t.length < 2) { api.setMsg('dsc-msg', 'Type what you ate first, e.g. “2 rotis and a bowl of dal”.'); $('dsc-text').focus(); return; }
+      if (!AI() || !aiCfg()) { api.setMsg('dsc-msg', 'The AI part didn’t load. Reload the app and try again.'); return; }
+      adBusy = true;
+      var b = $('dsc-go');
+      api.setBusy(b, true, 'Working it out…');
+      api.setMsg('dsc-msg', ''); api.setMsg('dsc-save-msg', '');
+      AI().call(sb, aiCfg(), { mode: 'describe', text: t }).then(function (j) {
+        if (api.current() !== 'aidescribe') return;
+        adItems = AI().pure.cleanItems(j && j.items);
+        if (!adItems.length) { $('dsc-out').hidden = true; api.setMsg('dsc-msg', 'The AI didn’t find any food in that. Try naming the foods and how much, e.g. “1 cup of rice”.'); return; }
+        renderAd();
+        $('dsc-out').hidden = false;
+      }).catch(function (e) {
+        api.setMsg('dsc-msg', aiErr(e));
+      }).finally(function () { adBusy = false; api.setBusy(b, false); });
+    });
+    function renderAd() {
+      var ul = $('dsc-list'); ul.textContent = '';
+      adItems.forEach(function (x, i) {
+        var li = el('li'), row = el('div', 'result dsc-item');
+        var txt = el('span', 'entry-text');
+        txt.appendChild(el('span', 'entry-name', x.name));
+        var bits = [x.amount];
+        if (x.grams) bits.push(Math.round(x.grams) + ' g');
+        bits.push('P ' + g1(x.p) + ' · C ' + g1(x.c) + ' · F ' + g1(x.f));
+        txt.appendChild(el('span', 'entry-meta', bits.join(' · ')));
+        row.appendChild(txt);
+        row.appendChild(el('span', 'entry-kcal', fmt(x.kcal)));
+        var rm = el('button', 'dsc-rm', '×'); rm.type = 'button';
+        rm.setAttribute('aria-label', 'Remove ' + x.name);
+        rm.addEventListener('click', function () {
+          adItems.splice(i, 1);
+          if (!adItems.length) { $('dsc-out').hidden = true; api.setMsg('dsc-msg', 'All removed. Change the description and tap Work it out again.'); return; }
+          renderAd();
+        });
+        row.appendChild(rm);
+        li.appendChild(row); ul.appendChild(li);
+      });
+      var t = AI().pure.totals(adItems);
+      $('dsc-total').textContent = 'Total ' + fmt(t.kcal) + ' kcal · protein ' + g1(t.p) + ' · carbs ' + g1(t.c) + ' · fat ' + g1(t.f);
+      adLabel();
+    }
+    function adLabel() {
+      var n = adItems.length, m = radio('dsc-meal') || defaultMeal();
+      $('dsc-add').textContent = 'Add ' + (n === 1 ? '1 food' : n + ' foods') + ' to ' + mealLabel(m);
+      $('dsc-add').dataset.label = $('dsc-add').textContent;
+    }
+    $('view-aidescribe').addEventListener('change', function (ev) {
+      if (ev.target && ev.target.name === 'dsc-meal') { api.setMsg('dsc-save-msg', ''); adLabel(); }
+    });
+    $('dsc-add').addEventListener('click', function () {
+      if (saving || !adItems.length) return;
+      if (!navigator.onLine) { api.setMsg('dsc-save-msg', "You're offline. Connect to the internet and try again — nothing was lost."); return; }
+      var meal = radio('dsc-meal');
+      if (!meal) { api.setMsg('dsc-save-msg', 'Pick a meal.'); return; }
+      var base = { user_id: api.me().id, log_date: day, meal: meal };
+      var rows = adItems.map(function (x) { return AI().pure.rowFor(x, base); });
+      saving = true;
+      var b = $('dsc-add');
+      api.setBusy(b, true, 'Saving…');
+      sb.from('food_log').insert(rows).select().then(function (res) {
+        if (res.error) throw res.error;
+        (res.data && res.data.length ? res.data : rows).forEach(function (r) { entries.push(r); });
+        adItems = [];
+        api.showToday('Added ' + rows.length + (rows.length === 1 ? ' food' : ' foods') + ' to ' + mealLabel(meal) + '.', { keepEntries: true });
+      }).catch(function (e) {
+        console.warn('AI foods save failed:', e && (e.code || e.message));
+        api.setMsg('dsc-save-msg', api.friendly(e) + ' Nothing was saved — try again.');
+      }).finally(function () { saving = false; api.setBusy(b, false); });
+    });
+
+    $('af-ai-label').addEventListener('click', function () {
+      if (api.viewOnly() || labelBusy) return;
+      api.setMsg('af-ai-msg', '');
+      $('ai-label-file').value = '';
+      $('ai-label-file').click();
+    });
+    $('ai-label-file').addEventListener('change', function () {
+      var f = $('ai-label-file').files && $('ai-label-file').files[0];
+      if (!f || labelBusy) return;
+      if (!/^image\//.test(f.type || '')) { api.setMsg('af-ai-msg', 'That file isn’t a photo. Take or choose a photo of the nutrition label.'); return; }
+      if (f.size > 30 * 1024 * 1024) { api.setMsg('af-ai-msg', 'That photo is too big (over 30 MB). Try another one.'); return; }
+      if (!AI() || !aiCfg()) { api.setMsg('af-ai-msg', 'The AI part didn’t load. Reload the app and try again.'); return; }
+      labelBusy = true;
+      var b = $('af-ai-label'), meal = radio('af-meal') || defaultMeal();
+      aiBusyBtn(b, true, 'Reading the label…');
+      AI().photoBase64(f).then(function (b64) {
+        return AI().call(sb, aiCfg(), { mode: 'label', image: b64 });
+      }).then(function (j) {
+        if (api.current() !== 'addfood') return;
+        var food = AI().pure.labelFood(j && j.label);
+        if (!food) { api.setMsg('af-ai-msg', 'Couldn’t read a nutrition label in that photo. Try again with the label flat, close up and in focus.'); return; }
+        openPortion(food, null, null, meal);
+      }).catch(function (e) {
+        api.setMsg('af-ai-msg', aiErr(e));
+      }).finally(function () { labelBusy = false; aiBusyBtn(b, false); });
+    });
 
     /* ---------- Past 7 days ---------- */
     var weekToken = 0;
